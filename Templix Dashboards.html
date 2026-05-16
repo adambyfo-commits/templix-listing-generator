@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Templix · Eight dashboards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #2A2722; }
+    body { font-family: Geist, system-ui, sans-serif; color: #1B1A17; }
+    #app { height: 100vh; }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="dashboards/data.js"></script>
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="dashboards/shared.jsx"></script>
+  <script type="text/babel" src="dashboards/v1-studio.jsx"></script>
+  <script type="text/babel" src="dashboards/v2-gallery.jsx"></script>
+  <script type="text/babel" src="dashboards/v3-ledger.jsx"></script>
+  <script type="text/babel" src="dashboards/v4-kanban.jsx"></script>
+  <script type="text/babel" src="dashboards/v5-storefront.jsx"></script>
+  <script type="text/babel" src="dashboards/v6-pipeline.jsx"></script>
+  <script type="text/babel" src="dashboards/v7-editorial.jsx"></script>
+  <script type="text/babel" src="dashboards/v8-console.jsx"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/babel">
+    const { DesignCanvas, DCSection, DCArtboard } = window;
+    const W = 1440, H = 900;
+
+    function App() {
+      return (
+        <DesignCanvas title="Templix · Etsy seller dashboard"
+                      subtitle="Eight directions for managing 26 bundles + 41 source products. Real data from the master mapping; mock metrics. Click any artboard to open fullscreen.">
+          <DCSection id="data-dense"
+                     title="Data-dense ops"
+                     subtitle="When the seller knows their catalog and wants to scan it fast.">
+            <DCArtboard id="v1" label="01 · Studio · table-first ops console"     width={W} height={H}><window.StudioDashboard /></DCArtboard>
+            <DCArtboard id="v3" label="02 · Ledger · monospace catalog ledger"    width={W} height={H}><window.LedgerDashboard /></DCArtboard>
+            <DCArtboard id="v8" label="03 · Console · master / detail split pane" width={W} height={H}><window.ConsoleDashboard /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="visual-first"
+                     title="Visual-first browsing"
+                     subtitle="Cover-driven views that look more like a shop than a spreadsheet.">
+            <DCArtboard id="v2" label="04 · Gallery · Pinterest-style card grid"  width={W} height={H}><window.GalleryDashboard /></DCArtboard>
+            <DCArtboard id="v5" label="05 · Storefront · warm seller home + shelves" width={W} height={H}><window.StorefrontDashboard /></DCArtboard>
+            <DCArtboard id="v7" label="06 · Editorial · magazine spotlight"       width={W} height={H}><window.EditorialDashboard /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="workflow"
+                     title="Workflow & status"
+                     subtitle="Less about the catalog as inventory, more about its production.">
+            <DCArtboard id="v4" label="07 · Kanban · group by tier"                width={W} height={H}><window.KanbanDashboard /></DCArtboard>
+            <DCArtboard id="v6" label="08 · Pipeline · production tracker"         width={W} height={H}><window.PipelineDashboard /></DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+  </script>
+</body>
+</html>

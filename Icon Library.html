@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Templix · Icon Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; min-height: 100%; background: #15130F; }
+    body { font-family: Geist, system-ui, sans-serif; color: #F4EFE3; }
+    .page { max-width: 1280px; margin: 0 auto; padding: 56px 48px 80px; }
+    h1 { font-family: 'Instrument Serif', serif; font-size: 60px; margin: 0 0 8px; font-weight: 400; letter-spacing: -0.02em; }
+    .sub { color: #A8A296; font-size: 15px; line-height: 1.6; max-width: 640px; }
+    .toolbar { margin: 28px 0 32px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+    .toolbar input[type="search"] {
+      background: #211E19; border: 1px solid #3F3D38; color: #F4EFE3;
+      padding: 10px 14px; border-radius: 6px; font: inherit; font-size: 14px; min-width: 260px;
+    }
+    .swatches { display: flex; gap: 8px; }
+    .swatch {
+      width: 32px; height: 32px; border-radius: 6px; border: 1px solid #3F3D38;
+      cursor: pointer; padding: 0;
+    }
+    .swatch.on { box-shadow: 0 0 0 2px #F4EFE3; }
+    .grid {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    .card {
+      background: var(--accent, #2C1A3D); border-radius: 16px; padding: 24px 18px 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      cursor: pointer; position: relative; transition: transform 0.15s;
+    }
+    .card:hover { transform: translateY(-2px); }
+    .icon-box { width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; }
+    .name { font-size: 15px; font-weight: 600; color: #FFFFFF; }
+    .key  { font-family: 'Geist Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.65);
+            background: rgba(0,0,0,0.25); padding: 3px 8px; border-radius: 4px; }
+    .copied { position: absolute; top: 8px; right: 10px; font-family: 'Geist Mono', monospace; font-size: 10px;
+              color: #FFFFFF; background: rgba(0,0,0,0.35); padding: 3px 7px; border-radius: 4px;
+              opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+    .card.copied .copied { opacity: 1; }
+    .nav-back {
+      display: inline-flex; align-items: center; gap: 8px;
+      color: #A8A296; font-size: 13px; text-decoration: none;
+      padding: 8px 14px; border: 1px solid #3F3D38; border-radius: 999px;
+      font-family: 'Geist Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .nav-back:hover { color: #F4EFE3; }
+    .meta-strip {
+      display: flex; gap: 28px; padding: 18px 0; margin-top: 28px;
+      border-top: 1px solid #2A2722; border-bottom: 1px solid #2A2722;
+      font-family: 'Geist Mono', monospace; font-size: 12px; color: #A8A296;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="dashboards/data.js"></script>
+  <script src="dashboards/pages.js"></script>
+  <script src="dashboards/core.js"></script>
+  <script src="dashboards/canva.js"></script>
+  <script src="generator/content.js"></script>
+  <script type="text/babel" src="generator/fit-text.jsx?v=2"></script>
+  <script type="text/babel" src="generator/cards.jsx?v=183"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    // Curated, ordered list of icon entries shown on the page.
+    // The keys reference window.ICONS exposed by cards.jsx.
+    const ICON_ENTRIES = [
+      { key: 'template',    name: 'Template'         },
+      { key: 'modules',     name: 'Multi-Purpose'    },
+      { key: 'newtemplate', name: 'New Template'     },
+      { key: 'edit',        name: 'Edit Template'    },
+      { key: 'layout',      name: 'Layout'           },
+      { key: 'simple',      name: 'Simple Page'      },
+      { key: 'checklist',   name: 'Checklist'        },
+      { key: 'download',    name: 'Download'         },
+      { key: 'stack',       name: 'Stack'            },
+      { key: 'files',       name: 'Files'            },
+      { key: 'share',       name: 'Share'            },
+      { key: 'settings',    name: 'Settings'         },
+      { key: 'calendar',    name: 'Calendar'         },
+      { key: 'link',        name: 'Link'             },
+      { key: 'star',        name: 'Star / Featured'  },
+      { key: 'nav',         name: 'Seamless Nav'     },
+      { key: 'pdf',          name: 'PDF Optimized'    },
+      { key: 'calendarLine', name: 'Calendar (line)'  },
+      { key: 'notes',        name: 'Notes'            },
+      { key: 'meetings',     name: 'Meetings'         },
+      { key: 'agenda',       name: 'Agenda'           },
+    ];
+
+    const ACCENT_PRESETS = [
+      { name: 'Aubergine', bg: '#2C1A3D', label: 'Plus' },
+      { name: 'Forest',    bg: '#15302A', label: 'Pro'  },
+      { name: 'Bronze',    bg: '#2A1F12', label: 'Ultimate' },
+      { name: 'Ink',       bg: '#1B1A17', label: 'Mono' },
+    ];
+
+    function App() {
+      const [q, setQ] = useState('');
+      const [bgIdx, setBgIdx] = useState(0);
+      const accent = ACCENT_PRESETS[bgIdx];
+
+      const filtered = useMemo(() => {
+        const term = q.trim().toLowerCase();
+        if (!term) return ICON_ENTRIES;
+        return ICON_ENTRIES.filter(e =>
+          e.key.includes(term) || e.name.toLowerCase().includes(term)
+        );
+      }, [q]);
+
+      const copy = (e, key) => {
+        navigator.clipboard?.writeText(key);
+        e.currentTarget.classList.add('copied');
+        setTimeout(() => e.currentTarget.classList.remove('copied'), 900);
+      };
+
+      return (
+        <div className="page">
+          <a className="nav-back" href="Listing Generator.html">← Listing Generator</a>
+
+          <div style={{ marginTop: 28 }}>
+            <h1>Icon Library</h1>
+            <p className="sub">
+              Tablet-bezel iconography used across every listing card. Click an
+              icon to copy its key — paste it into <code style={{
+                fontFamily:'Geist Mono, monospace', background:'#211E19',
+                padding:'2px 6px', borderRadius:4
+              }}>data/card_content.csv</code> as a <code style={{
+                fontFamily:'Geist Mono, monospace', background:'#211E19',
+                padding:'2px 6px', borderRadius:4
+              }}>tile_N_icon</code> value to swap which glyph a card renders.
+            </p>
+          </div>
+
+          <div className="meta-strip">
+            <span>{ICON_ENTRIES.length} icons</span>
+            <span>SVG · 140 × 140</span>
+            <span>2 px stroke · rounded</span>
+            <span>Single colour</span>
+          </div>
+
+          <div className="toolbar">
+            <input
+              type="search"
+              placeholder="Search by name or key…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              autoFocus
+            />
+            <div className="swatches">
+              {ACCENT_PRESETS.map((s, i) => (
+                <button key={s.name} className={`swatch ${i === bgIdx ? 'on' : ''}`}
+                        title={s.name + ' · ' + s.label}
+                        style={{ background: s.bg }}
+                        onClick={() => setBgIdx(i)} />
+              ))}
+            </div>
+          </div>
+
+          <div className="grid">
+            {filtered.map(entry => {
+              const Comp = window.ICONS?.[entry.key];
+              if (!Comp) return null;
+              return (
+                <div key={entry.key}
+                     className="card"
+                     style={{ '--accent': accent.bg }}
+                     onClick={(e) => copy(e, entry.key)}
+                     title={`Copy "${entry.key}"`}>
+                  <span className="copied">Copied</span>
+                  <div className="icon-box"><Comp /></div>
+                  <div className="name">{entry.name}</div>
+                  <div className="key">{entry.key}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {filtered.length === 0 && (
+            <div style={{ padding: '40px 0', color: '#A8A296', textAlign: 'center' }}>
+              No icons match "{q}".
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+  </script>
+</body>
+</html>

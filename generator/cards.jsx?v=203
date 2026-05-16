@@ -1,0 +1,2461 @@
+// Listing image cards — Templix Etsy gallery
+// Visual system matches the Canva reference:
+//   - Deep aubergine background, lavender accent boxes
+//   - Heavy bold sans-serif (Sora) display + Instrument Serif italic accents
+//   - "LIMITED TIME 50% OFF" ribbon top-left
+//   - TemplixStudios wordmark + tier pill top
+//   - Tablet mockups fanned across the middle
+//   - "Key Features" panel + 3 line-icon tiles at bottom
+
+// ── Per-tier palette ────────────────────────────────────────────────────
+const TIER = {
+  Core: {
+    bg: '#173F3F', // deep teal
+    bgGrad: '#1F5454',
+    accent: '#2D6A6A', // primary teal
+    accent2: '#1F4F4F',
+    pillBg: '#E9EAE6',
+    on: '#FFFFFF'
+  },
+  Plus: {
+    bg: '#2C1A3D', // deep aubergine
+    bgGrad: '#3A2353',
+    accent: '#A98CC9', // lavender (ribbon, pill, boxes)
+    accent2: '#8F6FBA',
+    on: '#FFFFFF'
+  },
+  Pro: {
+    bg: '#1A1C26', // deep slate
+    bgGrad: '#262834',
+    accent: '#4E8CC7', // brand blue
+    accent2: '#3970A5',
+    pillBg: '#414048',
+    on: '#FFFFFF'
+  },
+  Ultimate: {
+    bg: '#2A1F12', // deep bronze
+    bgGrad: '#3D2D1A',
+    accent: '#D59006', // amber gold
+    accent2: '#A6700A',
+    on: '#FFFFFF'
+  }
+};
+window.TIER = TIER;
+
+// ── CSV-driven content helpers ──────────────────────────────────────────
+// getFeatures(bundle, cardId, defaults) → array, with overrides feature_1..feature_N
+// getTiles(bundle, cardId, defaults)   → array of {icon, label}, with tile_N_icon / tile_N_label
+function getFeatures(bundle, cardId, defaults) {
+  const get = window.getCardContent;
+  if (!get) return defaults;
+  return defaults.map((d, i) => get(bundle.id, cardId, `feature_${i + 1}`, d, bundle)).filter(Boolean);
+}
+function getTiles(bundle, cardId, defaults) {
+  const get = window.getCardContent;
+  if (!get) return defaults;
+  return defaults.map((d, i) => ({
+    icon: get(bundle.id, cardId, `tile_${i + 1}_icon`, d.icon, bundle),
+    label: get(bundle.id, cardId, `tile_${i + 1}_label`, d.label, bundle)
+  }));
+}
+
+const tone = (b) => TIER[b.tier] || TIER.Plus;
+
+// Context used to thread the active listing card id down to CardFrame so
+// per-card edits (nudge offsets) can be scoped to a single slot.
+window.CardIdContext = window.CardIdContext || React.createContext(null);
+
+// ── Frame ───────────────────────────────────────────────────────────────
+function CardFrame({ bundle, children }) {
+  const t = tone(bundle);
+  const cardId = React.useContext(window.CardIdContext);
+  return (
+    <div data-card-frame data-card-id={cardId || ''} style={{
+      position: 'relative',
+      width: 2000, height: 2000,
+      background: `radial-gradient(ellipse at 50% 30%, ${t.bgGrad} 0%, ${t.bg} 70%)`,
+      color: t.on,
+      fontFamily: 'Sora, system-ui, sans-serif',
+      overflow: 'hidden'
+    }}>
+      {children}
+    </div>);
+
+}
+
+// ── Discount sticker ───────────────────────────────────────────────────
+// Burst sticker stuck on top of the card — rotated, layered shadow so it
+// reads as a physical peel-and-stick price tag rather than part of the
+// integrated layout.
+function Ribbon({ bundle, off = 50, accent }) {
+  if (window.RIBBON_HIDDEN) return null;
+  const t = tone(bundle);
+  const fg = accent || t.accent;
+  // 16-point starburst — alternating outer/inner radii give the scalloped feel.
+  const points = 16;
+  const r1 = 95;
+  const r2 = 78;
+  const cx = 100,cy = 100;
+  let d = '';
+  for (let i = 0; i < points * 2; i++) {
+    const ang = i / (points * 2) * Math.PI * 2 - Math.PI / 2;
+    const r = i % 2 === 0 ? r1 : r2;
+    const x = cx + Math.cos(ang) * r;
+    const y = cy + Math.sin(ang) * r;
+    d += (i === 0 ? 'M' : 'L') + x.toFixed(2) + ',' + y.toFixed(2) + ' ';
+  }
+  d += 'Z';
+
+  return (
+    <div style={{
+      position: 'absolute', top: 40, left: 40,
+      width: 340, height: 340,
+      transform: 'rotate(-9deg)',
+      filter: 'drop-shadow(0 14px 18px rgba(0,0,0,0.35)) drop-shadow(0 2px 4px rgba(0,0,0,0.25))'
+    }}>
+      <svg width="100%" height="100%" viewBox="0 0 200 200">
+        {/* Outer burst */}
+        <path d={d} fill={fg} />
+      </svg>
+      {/* "LAUNCH" / "OFFER" stacked straight above the percentage */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        color: '#FFFFFF', textAlign: 'center',
+        fontWeight: 700, lineHeight: 1
+      }}>
+        <div style={{
+          fontSize: 22, fontWeight: 700, letterSpacing: '0.18em',
+          textTransform: 'uppercase'
+        }}>LAUNCH</div>
+        <div style={{
+          marginTop: 4, fontSize: 22, fontWeight: 700, letterSpacing: '0.18em',
+          textTransform: 'uppercase'
+        }}>OFFER</div>
+        <div style={{
+          marginTop: 12, fontSize: 80, fontWeight: 800,
+          letterSpacing: '-0.02em'
+        }}>{off}%</div>
+        <div style={{
+          marginTop: 4, fontSize: 30, fontWeight: 700, letterSpacing: '0.12em'
+        }}>OFF</div>
+      </div>
+    </div>);
+
+}
+
+// ── Tier Pill ───────────────────────────────────────────────────────────
+function TierPill({ bundle, size = 60 }) {
+  const t = tone(bundle);
+  return (
+    <div style={{
+      display: 'inline-block',
+      padding: `${size * 0.35}px ${size * 0.95}px`,
+      background: t.accent,
+      color: '#FFFFFF',
+      fontWeight: 700, fontSize: size,
+      letterSpacing: '0.06em',
+      borderRadius: 999,
+      textTransform: 'uppercase'
+    }}>{bundle.tier}</div>);
+
+}
+
+// ── Tablet mockup — use the Move Master bezel + composite cover on screen
+function Tablet({ src, width = 460, tilt = 0, z = 1 }) {
+  const height = width * 1.575; // bezel aspect (869×1369)
+  // Screen inset measured from tablet-bezel.png alpha
+  const inset = { top: 4.2, right: 19.6, bottom: 12.7, left: 7.1 };
+  return (
+    <div style={{
+      width, height,
+      transform: `rotate(${tilt}deg)`,
+      zIndex: z,
+      position: 'relative',
+      filter: 'drop-shadow(0 22px 36px rgba(0,0,0,0.28))'
+    }}>
+      {/* Screen content underneath */}
+      {src &&
+      <div style={{
+        position: 'absolute',
+        top: `${inset.top}%`,
+        left: `${inset.left}%`,
+        right: `${inset.right}%`,
+        bottom: `${inset.bottom}%`,
+        backgroundColor: '#FFFFFF',
+        overflow: 'hidden'
+      }}>
+          <img src={src} alt=""
+        style={{ width: '100%', height: 'auto', display: 'block' }} />
+        </div>
+      }
+      {/* Bezel on top */}
+      <img src="generator/tablet-bezel.png" alt=""
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} />
+    </div>);
+
+}
+
+// ── Header chrome (Designed for reMarkable + Wordmark + Pill) ───────────
+function HeaderChrome({ bundle, sub }) {
+  const t = tone(bundle);
+  const isRM = sub && sub.italic === 'reMarkable';
+  return (
+    <div style={{
+      position: 'absolute', top: 60, left: 0, right: 0,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      textAlign: 'center', color: t.on
+    }}>
+      {sub &&
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        textAlign: 'center', whiteSpace: 'nowrap', gap: 14
+      }}>
+          {/* Pyramid sizing on a single line — bottom-aligned with the logo */}
+          <span style={{
+          fontSize: 38, fontWeight: 500, letterSpacing: '0.02em',
+          opacity: 0.9,
+          lineHeight: 1
+        }}>{sub.before.trim()}</span>
+
+          {isRM ?
+        <img
+          src="generator/remarkable-logo.png"
+          alt="reMarkable"
+          crossOrigin="anonymous"
+          style={{
+            height: 62,
+            display: 'block'
+          }} /> :
+
+
+        <em style={{
+          fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontWeight: 400, fontSize: 62, lineHeight: 1
+        }}>{sub.italic}</em>
+        }
+
+          <span style={{
+          fontSize: 38, fontWeight: 500, letterSpacing: '0.01em',
+          lineHeight: 1
+        }}>{sub.after.trim()}</span>
+        </div>
+      }
+      <div style={{
+        marginTop: sub ? 40 : 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+      </div>
+    </div>);
+
+}
+
+// ── Flag chips for "5 Language Systems" ─────────────────────────────────
+// SVG-rendered flag thumbnails with correct stripe orientations + a touch
+// of polish (subtle shadow, rounded corners).
+function LangFlags() {
+  const flagSize = { w: 60, h: 40 };
+  const wrap = (children) =>
+  <svg width={flagSize.w} height={flagSize.h} viewBox="0 0 60 40">
+      <defs>
+        <clipPath id="flagClip"><rect width="60" height="40" rx="5" /></clipPath>
+      </defs>
+      <g clipPath="url(#flagClip)">{children}</g>
+      <rect x="0.5" y="0.5" width="59" height="39" rx="4.5"
+    fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="1" />
+    </svg>;
+
+
+  const flags = [
+  { code: 'EN', svg:
+    <g>
+        <rect width="60" height="40" fill="#012169" />
+        {/* White diagonals (saltire) */}
+        <path d="M0 0L60 40M60 0L0 40" stroke="#FFFFFF" strokeWidth="9" />
+        {/* Red diagonals on top */}
+        <path d="M0 0L60 40M60 0L0 40" stroke="#C8102E" strokeWidth="4" />
+        {/* White cross */}
+        <rect x="25" y="0" width="10" height="40" fill="#FFFFFF" />
+        <rect x="0" y="15" width="60" height="10" fill="#FFFFFF" />
+        {/* Red cross */}
+        <rect x="27" y="0" width="6" height="40" fill="#C8102E" />
+        <rect x="0" y="17" width="60" height="6" fill="#C8102E" />
+      </g>
+  },
+  { code: 'IT', svg:
+    <g>
+        <rect width="20" height="40" fill="#008C45" />
+        <rect x="20" width="20" height="40" fill="#F4F5F0" />
+        <rect x="40" width="20" height="40" fill="#CD212A" />
+      </g>
+  },
+  { code: 'DE', svg:
+    <g>
+        <rect width="60" height="13.33" fill="#000000" />
+        <rect y="13.33" width="60" height="13.33" fill="#DD0000" />
+        <rect y="26.66" width="60" height="13.34" fill="#FFCE00" />
+      </g>
+  },
+  { code: 'ES', svg:
+    <g>
+        <rect width="60" height="10" fill="#AA151B" />
+        <rect y="10" width="60" height="20" fill="#F1BF00" />
+        <rect y="30" width="60" height="10" fill="#AA151B" />
+      </g>
+  },
+  { code: 'FR', svg:
+    <g>
+        <rect width="20" height="40" fill="#0055A4" />
+        <rect x="20" width="20" height="40" fill="#FFFFFF" />
+        <rect x="40" width="20" height="40" fill="#EF4135" />
+      </g>
+  }];
+
+
+  return (
+    <span style={{
+      display: 'inline-flex', gap: 8, marginLeft: 16,
+      verticalAlign: 'middle',
+      filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.25))'
+    }}>
+      {flags.map((f) =>
+      <span key={f.code} title={f.code} style={{ display: 'inline-block', lineHeight: 0 }}>
+          {wrap(f.svg)}
+        </span>
+      )}
+    </span>);
+
+}
+
+// ── Bottom info panels ──────────────────────────────────────────────────
+function BottomPanels({ bundle, features, icons }) {
+  const t = tone(bundle);
+  return (
+    <div style={{
+      position: 'absolute', bottom: 100, left: 100, right: 100, zIndex: 10,
+      display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40
+    }}>
+      {/* Key Features panel — What's Included spacing, accent background */}
+      <div style={{
+        background: t.accent, color: '#FFFFFF',
+        borderRadius: 26, padding: '28px 34px',
+        display: 'flex', flexDirection: 'column'
+      }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          paddingBottom: 16
+        }}>
+          <ClipboardIcon />
+          <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: '-0.01em' }}>Key Features</span>
+        </div>
+        <ul style={{
+          margin: '18px 0 0', padding: 0, listStyle: 'none',
+          display: 'flex', flexDirection: 'column', gap: 12
+        }}>
+          {features.map((f, i) => {
+            const isLast = i === features.length - 1;
+            return (
+              <li key={i} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 14,
+                fontSize: 26,
+                fontWeight: isLast ? 600 : 500,
+                lineHeight: isLast ? 1.2 : 1.25,
+                letterSpacing: isLast ? '-0.005em' : 'normal'
+              }}>
+              <span style={{ flexShrink: 0, paddingTop: 4 }}>
+                <CheckGlyph color="#FFFFFF" />
+              </span>
+              <span style={{
+                  display: 'flex', alignItems: 'center', gap: 16,
+                  justifyContent: 'space-between', flex: 1
+                }}>
+                <span>{f}</span>
+                {/Language|Lang/i.test(f) && <LangFlags />}
+              </span>
+            </li>);
+
+          })}
+        </ul>
+      </div>
+
+      {/* Icon tiles — Key Features structure reversed: icons row + divider + labels row */}
+      <div style={{
+        background: t.accent, color: '#FFFFFF',
+        borderRadius: 26, padding: '48px 28px 18px',
+        display: 'flex', flexDirection: 'column'
+      }}>
+        {/* Icons row */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 18,
+          paddingBottom: 24
+        }}>
+          {icons.map((it, i) =>
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center'
+          }}>
+              <div style={{
+              width: 150, height: 150,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 16, boxSizing: 'border-box',
+              overflow: 'visible'
+            }}>
+                <div style={{
+                width: '100%', height: '100%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transform: 'scale(1.5)', transformOrigin: 'center'
+              }}>
+                  {typeof it.icon === 'string' ?
+                window.ICONS?.[it.icon] ? React.createElement(window.ICONS[it.icon]) : null :
+                it.icon}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* Labels row */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 18,
+          paddingTop: 16
+        }}>
+          {icons.map((it, i) =>
+          <div key={i} style={{
+            fontSize: 26, fontWeight: 600, lineHeight: 1.2,
+            letterSpacing: '-0.005em',
+            textAlign: 'center'
+          }}>
+              {it.label.split('\n').map((line, j) =>
+            <div key={j}>{line}</div>
+            )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>);
+
+}
+
+// ── Shared stroke constants ────────────────────────────────────────────
+const stroke = '#FFFFFF';
+const sw = 4;
+
+// Inline check (used inside the Key Features bullets)
+function CheckIcon({ size = 32 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <path d="M6 17l6 6 14-14" stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>);
+
+}
+
+// Clipboard header glyph next to "Key Features"
+function ClipboardIcon({ color }) {
+  const c = color || stroke;
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      <rect x="12" y="10" width="36" height="44" rx="4" stroke={c} strokeWidth={sw} fill="none" />
+      <rect x="22" y="6" width="16" height="8" rx="2" fill={c} />
+      <path d="M19 26h22M19 34h22M19 42h14" stroke={c} strokeWidth={sw} strokeLinecap="round" />
+    </svg>);
+
+}
+
+// ── Tablet Icon Library v2 ─────────────────────────────────────────────
+// Every icon is a tablet bezel containing a different page metaphor.
+// Shared frame: viewBox 0 0 140 140, white stroke, 3.5px, rounded.
+// All icons share: 140 viewBox, single stroke, tablet bezel with camera dot
+// at top and home indicator at bottom. Thin 1.6–1.8px strokes to match the
+// reference's pencil-on-paper feel.
+const tabletProps = { stroke, strokeWidth: 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
+const thinProps = { stroke, strokeWidth: 2.5, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
+function TabletFrame({ children }) {
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 140 140" fill="none">
+      <rect x="24" y="6" width="92" height="128" rx="7" {...tabletProps} />
+      <circle cx="70" cy="13" r="1.3" fill={stroke} />
+      <path d="M64 128h12" {...tabletProps} />
+      {children}
+    </svg>);
+
+}
+
+// 01 · Template — outlined card with "TEMPLATE" label, picture box w/ sun+mountains,
+// 3 small buttons under it, and 2 content lines below the card.
+function PagesIcon() {
+  return (
+    <TabletFrame>
+      <rect x="34" y="22" width="72" height="68" rx="1.6" {...thinProps} />
+      <text x="70" y="34" fill={stroke} fontSize="7" fontFamily="Geist, system-ui" fontWeight="600" textAnchor="middle" letterSpacing="0.6">TEMPLATE</text>
+      <rect x="40" y="42" width="60" height="28" rx="1.2" {...thinProps} />
+      <circle cx="50" cy="50" r="2" {...thinProps} />
+      <path d="M42 64l8-10 8 6 6-6 14 10" {...thinProps} />
+      <rect x="40" y="75" width="15" height="10" rx="1.2" {...thinProps} />
+      <rect x="62" y="75" width="15" height="10" rx="1.2" {...thinProps} />
+      <rect x="84" y="75" width="15" height="10" rx="1.2" {...thinProps} />
+      <path d="M34 102h72M34 110h54" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 02 · Modules — outer card containing a true 2×2 of mini-cards: image+text /
+// text-only / inset header / circle+lines.
+function HierarchyIcon() {
+  return (
+    <TabletFrame>
+      <rect x="32" y="22" width="76" height="96" rx="1.6" {...thinProps} />
+      {/* Top-left: image + lines */}
+      <rect x="38" y="30" width="30" height="38" rx="1.2" {...thinProps} />
+      <rect x="41" y="33" width="24" height="16" rx="1" {...thinProps} />
+      <circle cx="46" cy="38" r="1.6" {...thinProps} />
+      <path d="M43 44l4-5 4 3 3-3 7 6" {...thinProps} />
+      <path d="M41 54h24M41 59h20M41 64h16" {...thinProps} />
+      {/* Top-right: lines */}
+      <rect x="72" y="30" width="30" height="38" rx="1.2" {...thinProps} />
+      <path d="M76 38h22M76 44h22M76 50h22M76 56h16M76 62h22" {...thinProps} />
+      {/* Bottom-left: short label + lines */}
+      <rect x="38" y="72" width="30" height="38" rx="1.2" {...thinProps} />
+      <path d="M41 78h10" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M41 86h24M41 91h24M41 96h18M41 101h24" {...thinProps} />
+      {/* Bottom-right: circle + lines */}
+      <rect x="72" y="72" width="30" height="38" rx="1.2" {...thinProps} />
+      <circle cx="80" cy="83" r="3.4" {...thinProps} />
+      <path d="M87 81h13M87 86h10" {...thinProps} />
+      <path d="M76 94h22M76 99h16M76 104h22" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 03 · New Template — dashed square w/ centred plus, label below.
+function NewTemplateIcon() {
+  return (
+    <TabletFrame>
+      <rect x="40" y="34" width="60" height="56" rx="1.5" stroke={stroke} strokeWidth="1.4" strokeDasharray="3.2 2.6" fill="none" />
+      <path d="M70 50v24M58 62h24" {...thinProps} />
+      <text x="70" y="104" fill={stroke} fontSize="7.5" fontFamily="Geist, system-ui" fontWeight="600" textAnchor="middle" letterSpacing="0.6">NEW TEMPLATE</text>
+    </TabletFrame>);
+
+}
+
+// 04 · Edit — page (offset slightly left) + pencil pointing in from the right.
+function EditTemplateIcon() {
+  return (
+    <TabletFrame>
+      <rect x="32" y="24" width="58" height="94" rx="1.6" {...thinProps} />
+      <rect x="36" y="28" width="50" height="8" rx="1" {...thinProps} />
+      <rect x="36" y="42" width="24" height="18" rx="1" {...thinProps} />
+      <circle cx="42" cy="47" r="1.5" {...thinProps} />
+      <path d="M38 56l5-6 4 3 3-3 10 7" {...thinProps} />
+      <path d="M64 46h22M64 51h22M64 56h16" {...thinProps} />
+      <path d="M36 66h50M36 71h50M36 76h36M36 84h50M36 89h50M36 94h30M36 102h50M36 107h36" {...thinProps} />
+      {/* Pencil — body, tip, eraser */}
+      <path d="M100 70l14-14 6 6-14 14z" {...thinProps} />
+      <path d="M100 70l-2 8 8-2" {...thinProps} />
+      <path d="M112 58l4-4" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 05 · Layout — bigger, fewer blocks with stronger contrast.
+function LayoutIcon() {
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 140 140" fill="none">
+      {/* Header bar */}
+      <rect x="14" y="14" width="112" height="26" rx="5" fill={stroke} />
+      {/* Sidebar */}
+      <rect x="14" y="48" width="36" height="78" rx="5" fill={stroke} />
+      {/* Main image block */}
+      <rect x="58" y="48" width="68" height="46" rx="5" fill={stroke} />
+      {/* Content rows */}
+      <rect x="58" y="102" width="68" height="10" rx="4" fill={stroke} />
+      <rect x="58" y="118" width="48" height="8" rx="4" fill={stroke} />
+    </svg>);
+
+}
+
+// 06 · Simple page — wrapping card with a hero rect, 2 lines, and 3 small
+// buttons (only 3 visible, narrower than the hero strip).
+function SimplePageIcon() {
+  return (
+    <TabletFrame>
+      <rect x="32" y="24" width="76" height="96" rx="1.6" {...thinProps} />
+      <rect x="38" y="38" width="64" height="22" rx="1.2" {...thinProps} />
+      <path d="M38 72h64M38 80h50M38 88h60" {...thinProps} />
+      <rect x="42" y="98" width="16" height="14" rx="1.2" {...thinProps} />
+      <rect x="62" y="98" width="16" height="14" rx="1.2" {...thinProps} />
+      <rect x="82" y="98" width="16" height="14" rx="1.2" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 07 · Checklist — bold filled doc, 2 large rows, big chunky checks.
+function ChecklistIcon() {
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 140 140" fill="none">
+      {/* Page background */}
+      <rect x="16" y="10" width="108" height="120" rx="10" fill={stroke} />
+      {/* Row 1: big check pill + line */}
+      <rect x="28" y="30" width="30" height="30" rx="7" fill="#173F3F" />
+      <path d="M36 46l6 6 10-12" stroke={stroke} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <rect x="66" y="38" width="48" height="14" rx="5" fill="#173F3F" />
+      {/* Row 2 */}
+      <rect x="28" y="78" width="30" height="30" rx="7" fill="#173F3F" />
+      <path d="M36 94l6 6 10-12" stroke={stroke} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <rect x="66" y="86" width="48" height="14" rx="5" fill="#173F3F" />
+    </svg>);
+
+}
+
+// 08 · Download — chunky filled arrow + tray (proper shaft + flared head).
+function DownloadIcon() {
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 140 140" fill="none">
+      {/* Arrow shaft */}
+      <rect x="54" y="14" width="32" height="54" rx="5" fill={stroke} />
+      {/* Arrow head — flared triangle */}
+      <path d="M22 60l48 50 48-50z" fill={stroke} />
+      {/* Tray base */}
+      <rect x="16" y="116" width="108" height="14" rx="5" fill={stroke} />
+    </svg>);
+
+}
+
+// 09 · Stack — main page inside the tablet, plus 2 sheets fanning out to
+// the right (poking past the bezel's right edge).
+function StackIcon() {
+  return (
+    <TabletFrame>
+      {/* Two back sheets peeking out to the right */}
+      <path d="M108 24h6v100h-6" {...thinProps} />
+      <path d="M114 28h6v98h-6" {...thinProps} />
+      {/* Main front page */}
+      <rect x="32" y="24" width="72" height="96" rx="1.6" {...thinProps} />
+      <rect x="38" y="30" width="60" height="10" rx="1" {...thinProps} />
+      <rect x="38" y="46" width="24" height="22" rx="1" {...thinProps} />
+      <path d="M65 48h33M65 54h33M65 60h22M65 66h33" {...thinProps} />
+      <path d="M38 76h60M38 82h36" {...thinProps} />
+      <rect x="38" y="92" width="16" height="18" rx="1" {...thinProps} />
+      <rect x="58" y="92" width="16" height="18" rx="1" {...thinProps} />
+      <rect x="78" y="92" width="16" height="18" rx="1" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 10 · Files — open folder with a document sitting half-out the top.
+function FilesIcon() {
+  return (
+    <TabletFrame>
+      {/* Document poking up out of the folder */}
+      <path d="M58 50h16l8 8v22H58z" {...thinProps} />
+      <path d="M74 50v8h8" {...thinProps} />
+      <path d="M62 64h12M62 70h12" {...thinProps} />
+      {/* Folder (front flap is taller than back, like the reference) */}
+      <path d="M40 62h16l6 8h36v32a3 3 0 01-3 3H43a3 3 0 01-3-3z" {...thinProps} />
+      <path d="M40 78h58" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 11 · Share — 3-node graph, top-left to right and bottom-left to right.
+function ShareIcon() {
+  return (
+    <TabletFrame>
+      <circle cx="52" cy="54" r="6" {...thinProps} />
+      <circle cx="52" cy="94" r="6" {...thinProps} />
+      <circle cx="90" cy="74" r="6" {...thinProps} />
+      <path d="M58 58l26 12M58 90l26-12" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 12 · Settings — gear with 8 teeth and a centre hub.
+function SettingsIcon() {
+  return (
+    <TabletFrame>
+      <path d="M70 50v-7M70 90v7M50 70h-7M90 70h7M56 56l-5-5M84 56l5-5M56 84l-5 5M84 84l5 5" {...thinProps} />
+      <circle cx="70" cy="70" r="15" {...thinProps} />
+      <circle cx="70" cy="70" r="5" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 13 · Calendar
+function CalendarIcon() {
+  return (
+    <TabletFrame>
+      <rect x="30" y="32" width="80" height="76" rx="2" {...thinProps} />
+      <path d="M30 50h80" {...thinProps} />
+      <path d="M46 26v10M94 26v10" {...thinProps} />
+      <rect x="40" y="58" width="14" height="10" rx="1" {...thinProps} />
+      <rect x="63" y="58" width="14" height="10" rx="1" {...thinProps} />
+      <rect x="86" y="58" width="14" height="10" rx="1" {...thinProps} />
+      <rect x="40" y="76" width="14" height="10" rx="1" fill={stroke} />
+      <rect x="63" y="76" width="14" height="10" rx="1" {...thinProps} />
+      <rect x="86" y="76" width="14" height="10" rx="1" {...thinProps} />
+      <rect x="40" y="94" width="14" height="10" rx="1" {...thinProps} />
+      <rect x="63" y="94" width="14" height="10" rx="1" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 14 · Link
+function LinkIcon() {
+  return (
+    <TabletFrame>
+      <rect x="34" y="48" width="34" height="20" rx="10" {...thinProps} />
+      <rect x="72" y="72" width="34" height="20" rx="10" {...thinProps} />
+      <path d="M54 68l32-20M56 60h28" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// 15 · Star
+function StarChecklistIcon() {
+  return (
+    <TabletFrame>
+      <path d="M48 36l3.5 9 9.5 0.8-7 6 2.4 9.4L48 56l-8.4 5.2L42 51.8l-7-6 9.5-0.8z" {...thinProps} />
+      <path d="M72 42h32M72 50h22" {...thinProps} />
+      <path d="M30 76h80M30 84h80M30 92h46M30 102h80M30 110h32" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// Tablet+arrow (Seamless Navigation)
+function GridTabletIcon() {
+  return (
+    <TabletFrame>
+      <path d="M30 32h80M30 42h80M30 52h56" {...thinProps} />
+      <path d="M30 66h60M30 76h60M30 86h40" {...thinProps} />
+      <path d="M84 96l16 12-16 12M84 108h16" {...thinProps} />
+    </TabletFrame>);
+
+}
+
+// ── Pick N key page URLs for a product, skipping covers/blanks ──────────
+function pickKeyPages(productId, n) {
+  const all = window.TEMPLIX_PAGES?.[productId] || [];
+  // Skip cover + table-of-contents — those aren't "key pages"
+  const filtered = all.filter((p) =>
+  p.pageKey !== 'cover' &&
+  !/^toc/.test(p.pageKey) &&
+  p.url
+  );
+  if (!filtered.length) return [];
+  // Spread N picks across the available pages so we get variety
+  const step = Math.max(1, Math.floor(filtered.length / n));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(filtered[Math.min(i * step, filtered.length - 1)]?.url);
+  }
+  return out;
+}
+
+// ── Card 01 · Hero (bundle overview) ────────────────────────────────────
+function HeroCard({ bundle, products, title }) {
+  const totalPages = products.reduce((s, p) => s + (parseInt(p.galleryImages, 10) || 0), 0);
+  const tagline = title || bundle.heroTagline;
+  // Fan: 5 tablets. Pull one key (non-cover) page per product, cycling through products.
+  const fanCount = 5;
+  const tablets = Array.from({ length: fanCount }, (_, i) => {
+    const mid = (fanCount - 1) / 2;
+    const off = i - mid;
+    const dist = Math.abs(off);
+    const w = 620 - dist * 40;
+    const product = products[i % products.length];
+    // pick a different key page index per slot so the same product shows different pages
+    const productSlotIndex = Math.floor(i / Math.max(1, products.length));
+    const keyPages = product ? pickKeyPages(product.id, 5) : [];
+    const src = keyPages[productSlotIndex % keyPages.length] || product?.sampleUrl;
+    // Bezel is asymmetric (left inset 7.1%, right 19.6%), so the visible
+    // SCREEN center sits ~6.25% to the left of the bezel center. Nudge the
+    // whole tablet RIGHT by that amount so the page artwork reads centered.
+    const screenShift = w * 0.063;
+    return {
+      src,
+      width: w,
+      x: off * 340 + screenShift,
+      y: dist * 36,
+      z: fanCount - dist
+    };
+  });
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      <HeaderChrome
+        bundle={bundle}
+        sub={{ before: 'Designed for ', italic: 'reMarkable', after: ' Pro Move Devices' }} />
+      
+
+      {/* Title — compact, auto-fits long bundle names */}
+      <div style={{
+        position: 'absolute', top: 300, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <SectionTitle tag="h1" max={130} min={80}>{bundle.name}</SectionTitle>
+        <div style={{
+          marginTop: 18, fontSize: 42, fontWeight: 500, color: '#FFFFFF'
+        }}>{totalPages.toLocaleString()} Pages · {bundle.totalProducts} Products</div>
+      </div>
+
+      {/* Fanned tablets — hero feature */}
+      <div style={{
+        position: 'absolute', top: 540, left: '50%', width: 1, height: 800
+      }}>
+        {tablets.map((t, i) =>
+        <div key={i} style={{
+          position: 'absolute', left: t.x - t.width / 2, top: t.y, zIndex: t.z
+        }}>
+            <Tablet src={t.src} width={t.width} tilt={t.tilt} />
+          </div>
+        )}
+      </div>
+
+      <BottomPanels
+        bundle={bundle}
+        features={getFeatures(bundle, 'hero', [
+        'Left & Right Handed Versions',
+        '6 Color Editions',
+        'Fully Hyperlinked System',
+        '5 Language Systems']
+        )}
+        icons={getTiles(bundle, 'hero', [
+        { icon: 'checklist', label: 'Fully\nHyperlinked' },
+        { icon: 'download', label: 'Instant\nDownload' },
+        { icon: 'layout', label: 'Flexible\nLayouts' },
+        { icon: 'files', label: 'Universal\nPDF' }]
+        )} />
+      
+    </CardFrame>);
+
+}
+
+// ── Card 02 · What's Included (product showcase, similar to PRODUCT_01) ──
+function IncludedCard({ bundle, products }) {
+  const t = tone(bundle);
+  const c = window.TEMPLIX_CANVA && window.TEMPLIX_CANVA[bundle.id] || {};
+
+  // Pull col data from the canva schema (inc_col1..inc_col5)
+  const colsFromSheet = [1, 2, 3, 4, 5].map((i) => ({
+    title: c[`inc_col${i}_title`] || '',
+    bullets: [1, 2, 3, 4, 5].map((j) => c[`inc_col${i}_bullet_${j}`] || '').filter(Boolean)
+  })).filter((col) => col.title || col.bullets.length);
+
+  // Build 6 panels. If the sheet has fewer than 5 real product columns,
+  // fall back to deriving from products. Final cell is always "Bonus Content".
+  const productColCount = Math.min(colsFromSheet.filter((c) => c.title && c.title.toLowerCase() !== 'bonus content').length, 5);
+
+  // Synthesize summary panels if sheet doesn't supply them
+  const summaryPanels = [
+  {
+    title: 'Bundle Highlights',
+    icon: 'chart',
+    bullets: [
+    `${bundle.totalProducts} planners in one`,
+    `${bundle.gallery} pages total`,
+    'Lifetime updates',
+    'Buy once, use forever',
+    '5 languages, 6 colours']
+
+  },
+  {
+    title: 'Built for reMarkable',
+    icon: 'calendar',
+    bullets: [
+    'Paper Pro & Move sized',
+    'Hyperlinked navigation',
+    'Tap to jump anywhere',
+    'No scaling artifacts',
+    'Sideload in 2 minutes']
+
+  },
+  {
+    title: 'More Inside',
+    icon: 'doc',
+    bullets: [
+    'Yearly goals & reflection',
+    'Individual standalone templates',
+    'Monthly summaries',
+    'Individual standalone templates',
+    'Week-number reference']
+
+  }];
+
+
+  // Compose the 6 cells
+  const productCells = colsFromSheet.
+  filter((col) => col.title && col.title.toLowerCase() !== 'bonus content').
+  slice(0, 2).
+  map((col, i) => ({
+    title: col.title,
+    icon: ['clipboard', 'doc-edit'][i] || 'clipboard',
+    bullets: col.bullets
+  }));
+
+  // Pad product cells if needed (eg single-core mode)
+  while (productCells.length < 2 && products[productCells.length]) {
+    productCells.push({
+      title: products[productCells.length].name,
+      icon: 'clipboard',
+      bullets: [
+      `${products[productCells.length].galleryImages || '?'} pages`,
+      products[productCells.length].category || 'Planner pages',
+      'Hyperlinked navigation',
+      'Optimised for reMarkable']
+
+    });
+  }
+
+  // Bonus content always last (lavender highlight)
+  const bonusCol = colsFromSheet.find((col) => col.title?.toLowerCase() === 'bonus content');
+  const bonus = {
+    title: 'Bonus Content',
+    icon: 'clipboard',
+    bullets: bonusCol?.bullets?.length ? bonusCol.bullets : [
+    'Left/Right Handed',
+    '5 Colour Editions',
+    'Fully Hyperlinked',
+    '5 Languages Included',
+    'Optimized Pages'],
+
+    highlight: true
+  };
+
+  const cells = [...productCells, ...summaryPanels, bonus].slice(0, 6);
+
+  const subtitle = c.inc_subtitle || `Everything inside your ${bundle.name} system`;
+  const footer = c.inc_footer || `${bundle.name} — all products in one download.`;
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center' }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <SectionTitle marginTop={14} max={130}>What's Included</SectionTitle>
+        <div style={{
+          marginTop: 22, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 50, color: '#FFFFFF', maxWidth: 1500, margin: '22px auto 0',
+          lineHeight: 1.3
+        }}>{subtitle}</div>
+      </div>
+
+      {/* 3 × 2 grid — centered */}
+      <div style={{
+        position: 'absolute', top: 500, left: '50%', transform: 'translateX(-50%)',
+        width: 1640, bottom: 240,
+        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridTemplateRows: '1fr 1fr',
+        gap: 32
+      }}>
+        {cells.map((cell, i) =>
+        <div key={i} style={{
+          background: cell.highlight ? t.accent : '#FFFFFF',
+          color: cell.highlight ? '#FFFFFF' : '#1B1A17',
+          borderRadius: 26,
+          padding: '28px 34px',
+          boxShadow: '0 18px 30px -16px rgba(0,0,0,0.45)',
+          display: 'flex', flexDirection: 'column'
+        }}>
+            <div style={{
+            display: 'flex', alignItems: 'center', gap: 14,
+            paddingBottom: 16, borderBottom: cell.highlight ? '2px solid rgba(255,255,255,0.4)' : `2px solid ${t.accent}22`
+          }}>
+              <IncludedCellIcon kind={cell.icon} color={cell.highlight ? '#FFFFFF' : t.accent} />
+              <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: '-0.01em' }}>{cell.title}</span>
+            </div>
+            <ul style={{
+            margin: '18px 0 0', padding: 0, listStyle: 'none',
+            display: 'flex', flexDirection: 'column', gap: 12, flex: 1
+          }}>
+              {cell.bullets.slice(0, 5).map((b, j) =>
+            <li key={j} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 14,
+              fontSize: 26, fontWeight: 500, lineHeight: 1.25
+            }}>
+                  <span style={{ flexShrink: 0, paddingTop: 4 }}>
+                    <CheckGlyph color={cell.highlight ? '#FFFFFF' : '#1A4F46'} />
+                  </span>
+                  <span>{b}</span>
+                </li>
+            )}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        position: 'absolute', bottom: 70, left: 0, right: 0,
+        textAlign: 'center', color: '#FFFFFF',
+        fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+        fontSize: 44
+      }}>{footer}</div>
+    </CardFrame>);
+
+}
+
+// Cell-header icons (purple on white card, white on highlighted card)
+function IncludedCellIcon({ kind, color }) {
+  if (kind === 'doc-edit') {
+    return (
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <path d="M28 6h-14a4 4 0 00-4 4v24a4 4 0 004 4h16a4 4 0 004-4V12z" stroke={color} strokeWidth="3" strokeLinejoin="round" />
+        <path d="M28 6v6a4 4 0 004 4h2" stroke={color} strokeWidth="3" strokeLinejoin="round" />
+        <path d="M26 22l-6 6-2 4 4-2 6-6z" stroke={color} strokeWidth="3" strokeLinejoin="round" />
+      </svg>);
+
+  }
+  if (kind === 'chart') {
+    return (
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <rect x="8" y="22" width="6" height="14" rx="1.5" stroke={color} strokeWidth="3" />
+        <rect x="19" y="14" width="6" height="22" rx="1.5" stroke={color} strokeWidth="3" />
+        <rect x="30" y="8" width="6" height="28" rx="1.5" stroke={color} strokeWidth="3" />
+      </svg>);
+
+  }
+  if (kind === 'calendar') {
+    return (
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <rect x="6" y="10" width="32" height="28" rx="3" stroke={color} strokeWidth="3" />
+        <path d="M14 6v8M30 6v8M6 18h32" stroke={color} strokeWidth="3" strokeLinecap="round" />
+        <rect x="20" y="24" width="6" height="6" rx="1" fill={color} />
+      </svg>);
+
+  }
+  if (kind === 'doc') {
+    return (
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <path d="M28 6h-14a4 4 0 00-4 4v24a4 4 0 004 4h16a4 4 0 004-4V12z" stroke={color} strokeWidth="3" strokeLinejoin="round" />
+        <path d="M28 6v6a4 4 0 004 4h2" stroke={color} strokeWidth="3" strokeLinejoin="round" />
+        <path d="M16 22h12M16 28h12M16 16h8" stroke={color} strokeWidth="3" strokeLinecap="round" />
+      </svg>);
+
+  }
+  // default: clipboard
+  return (
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+      <rect x="10" y="8" width="24" height="30" rx="3" stroke={color} strokeWidth="3" />
+      <rect x="16" y="4" width="12" height="6" rx="1.5" fill={color} />
+      <path d="M16 22l4 4 8-8" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>);
+
+}
+
+// ── Card 03 · Tier comparison ───────────────────────────────────────────
+function TierCard({ bundle }) {
+  const PURPLE = tone(bundle).accent;
+  const GOLD = '#C8932E';
+  const tiers = [
+  {
+    name: 'CORE',
+    subtitle: 'Essential System',
+    subBg: '#E9EAE6',
+    iconBg: '#2D6A6A',
+    Icon: TierCoreIcon,
+    bullets: [
+    'Individual standalone templates',
+    'All key layouts and templates',
+    'Fully hyperlinked navigation',
+    'Clean, distraction-free design',
+    'Instant download access'],
+
+    cta: 'Start simple',
+    ctaBg: '#2D6A6A',
+    footer: 'Perfect for getting started'
+  },
+  {
+    name: 'PLUS',
+    subtitle: 'More Structure',
+    subBg: '#E5DAF0',
+    iconBg: '#A98CC9',
+    Icon: TierPlusIcon,
+    bullets: [
+    'Everything in Core',
+    'Multiple templates in one system',
+    'Full planning cycle (yearly → daily)',
+    'Built-in reviews & reflections',
+    'Better workflow organisation',
+    'Save vs buying individually'],
+
+    cta: 'Build your system',
+    ctaBg: '#A98CC9',
+    footer: 'Upgrade your workflow'
+  },
+  {
+    name: 'PRO',
+    subtitle: 'Full Productivity',
+    subBg: '#C7DCEE',
+    iconBg: '#4E8CC7',
+    Icon: TierProIcon,
+    bullets: [
+    'Everything in Plus',
+    'Specialist systems (Work, Projects, Goals)',
+    'Advanced review & planning cycles',
+    'Complete end-to-end workflow',
+    'Designed for high-volume use',
+    'Built for professionals (Exec, PM, Sales)'],
+
+    cta: 'Scale productivity',
+    ctaBg: '#4E8CC7',
+    footer: 'Built for serious users'
+  },
+  {
+    name: 'ULTIMATE',
+    subtitle: 'Complete System',
+    subBg: '#EBD9A6',
+    iconBg: GOLD,
+    Icon: TierUltimateIcon,
+    bullets: [
+    'Everything in Pro',
+    'Every template in the category',
+    '100+ structured sections',
+    'Full life/business/health coverage',
+    'Maximum depth & flexibility',
+    'No limitations — everything unlocked',
+    'Best value per template'],
+
+    cta: 'Unlock everything',
+    ctaBg: GOLD,
+    footer: 'Unlock the full and unlimited experience',
+    highlight: true
+  }];
+
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      {/* Top-right tier pill */}
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center' }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <SectionTitle marginTop={14} max={120}>Choose Your System</SectionTitle>
+        <div style={{
+          marginTop: 28, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 50, color: '#FFFFFF', maxWidth: 1200, margin: '28px auto 0',
+          lineHeight: 1.2
+        }}>Built for real work — designed for clarity, speed, and execution</div>
+      </div>
+
+      {/* Four columns */}
+      <div style={{
+        position: 'absolute', top: 540, left: 120, right: 120, bottom: 460,
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 28,
+        alignItems: 'stretch'
+      }}>
+        {tiers.map((tier, ti) => {
+          const Icon = tier.Icon;
+          // Ultimate is a touch longer than the others so it reads as the biggest option.
+          const extra = tier.highlight ? 140 : 0;
+          return (
+            <div key={tier.name} style={{
+              position: 'relative',
+              alignSelf: 'start',
+              background: '#FFFFFF',
+              color: '#1B1A17',
+              borderRadius: 26,
+              padding: tier.highlight ? '36px 34px 60px' : '28px 34px 32px',
+              minHeight: 600 + extra,
+              display: 'flex', flexDirection: 'column',
+              boxShadow: tier.highlight ?
+              `0 6px 12px -6px rgba(200,147,46,0.4), 0 0 0 1px rgba(200,147,46,0.25)` :
+              '0 4px 8px -6px rgba(0,0,0,0.25)',
+              border: tier.highlight ? `4px solid ${GOLD}` : 'none',
+              zIndex: tier.highlight ? 2 : 1
+            }}>
+              {/* Best Value badge above Ultimate */}
+              {tier.highlight &&
+              <div style={{
+                position: 'absolute', top: -100, left: '50%', transform: 'translateX(-50%)',
+                background: GOLD, color: '#FFFFFF',
+                padding: '16px 36px', borderRadius: 16,
+                fontSize: 34, fontWeight: 800, whiteSpace: 'nowrap',
+                letterSpacing: '0.01em',
+                display: 'flex', alignItems: 'center', gap: 14,
+                boxShadow: '0 8px 14px -6px rgba(200,147,46,0.45)'
+              }}>
+                  <SparkleGlyph size={26} /> Best Value <SparkleGlyph size={26} />
+                </div>
+              }
+
+              {/* Header — icon disc + name */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 20,
+                paddingBottom: 28,
+                borderBottom: `2px solid ${tier.iconBg}55`
+              }}>
+                <div style={{
+                  width: 84, height: 84, borderRadius: '50%',
+                  background: tier.iconBg, flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <Icon />
+                </div>
+                <span style={{ fontSize: 54, fontWeight: 800, letterSpacing: '-0.01em' }}>
+                  {tier.name}
+                </span>
+              </div>
+
+              {/* Subtitle pill */}
+              <div style={{
+                marginTop: 28,
+                background: tier.subBg, color: '#1B1A17',
+                padding: '10px 28px', borderRadius: 999,
+                fontSize: 30, fontWeight: 600, lineHeight: 1,
+                alignSelf: 'center', whiteSpace: 'nowrap'
+              }}>{tier.subtitle}</div>
+
+              {/* Bullets with checkmarks */}
+              <ul style={{
+                margin: '28px 0 0', padding: 0, listStyle: 'none',
+                display: 'flex', flexDirection: 'column', gap: 14
+              }}>
+                {tier.bullets.map((b, i) =>
+                <li key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  fontSize: 26, fontWeight: 500, lineHeight: 1.3
+                }}>
+                    <span style={{ flexShrink: 0, paddingTop: 4 }}>
+                      <CheckGlyph color={tier.iconBg} />
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                )}
+              </ul>
+
+              {/* CTA button */}
+              <div style={{
+                marginTop: 30, alignSelf: 'center',
+                background: tier.ctaBg, color: '#FFFFFF',
+                padding: '20px 24px', borderRadius: 14,
+                fontSize: 30, fontWeight: 700, textAlign: 'center',
+                letterSpacing: '-0.005em',
+                width: 320, boxSizing: 'border-box'
+              }}>{tier.cta}</div>
+
+              {/* Footer line */}
+              <div style={{
+                marginTop: 18, fontSize: 18, fontWeight: 600,
+                color: '#1B1A17', textAlign: 'center', lineHeight: 1.3,
+                opacity: 0.75
+              }}>{tier.footer}</div>
+            </div>);
+
+        })}
+      </div>
+
+      {/* Bottom CTA bar */}
+      <div style={{
+        position: 'absolute', bottom: 200, left: '50%', transform: 'translateX(-50%)',
+        width: 1280, background: PURPLE, borderRadius: 32,
+        padding: '44px 52px',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 14px 0 -8px rgba(0,0,0,0.22)'
+      }}>
+        <div style={{
+          position: 'absolute', left: 52, top: '50%', transform: 'translateY(-50%)',
+          width: 130, height: 130, background: '#FFFFFF', borderRadius: 22,
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <DownloadGlyph color={PURPLE} />
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 60, fontWeight: 800, color: '#FFFFFF', lineHeight: 1.1, letterSpacing: '-0.01em' }}>
+            Start with a free sample
+          </div>
+          <div style={{ marginTop: 10, fontSize: 32, color: '#FFFFFF', opacity: 0.9 }}>
+            Link in the description · See exactly how it works before you buy
+          </div>
+        </div>
+      </div>
+
+      {/* Footer tagline */}
+      <div style={{
+        position: 'absolute', bottom: 50, left: 0, right: 0,
+        textAlign: 'center', fontSize: 28, fontWeight: 700, color: '#FFFFFF'
+      }}>Built for real work — designed for clarity, speed, and execution</div>
+    </CardFrame>);
+
+}
+
+// Tier-card icon glyphs (sit on colored discs, white stroke)
+function TierCoreIcon() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+      <rect x="8" y="8" width="16" height="16" rx="2" stroke="#FFFFFF" strokeWidth="3" />
+      <rect x="32" y="8" width="16" height="16" rx="2" stroke="#FFFFFF" strokeWidth="3" />
+      <rect x="8" y="32" width="16" height="16" rx="2" stroke="#FFFFFF" strokeWidth="3" />
+      <rect x="32" y="32" width="16" height="16" rx="2" stroke="#FFFFFF" strokeWidth="3" />
+    </svg>);
+
+}
+function TierPlusIcon() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+      <path d="M28 8L8 18l20 10 20-10z" stroke="#FFFFFF" strokeWidth="3" strokeLinejoin="round" fill="#8BA8C9" />
+      <path d="M8 28l20 10 20-10" stroke="#FFFFFF" strokeWidth="3" strokeLinejoin="round" />
+      <path d="M8 38l20 10 20-10" stroke="#FFFFFF" strokeWidth="3" strokeLinejoin="round" />
+    </svg>);
+
+}
+function TierProIcon() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+      <circle cx="20" cy="20" r="8" stroke="#FFFFFF" strokeWidth="3" />
+      <path d="M20 10v-4M20 34v-4M10 20H6M34 20h-4M27 13l3-3M10 30l3-3M27 27l3 3M10 10l3 3" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="38" cy="38" r="6" stroke="#FFFFFF" strokeWidth="3" />
+      <path d="M38 30v-2M38 48v-2M30 38h-2M48 38h-2" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" />
+      <path d="M34 18a14 14 0 0114 14" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeDasharray="3 4" />
+    </svg>);
+
+}
+function TierUltimateIcon() {
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+      <path d="M10 18l8 10 10-14 10 14 8-10v22H10z" stroke="#FFFFFF" strokeWidth="3" strokeLinejoin="round" fill="none" />
+      <path d="M10 40h36" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" />
+      <circle cx="10" cy="18" r="2" fill="#FFFFFF" />
+      <circle cx="28" cy="14" r="2" fill="#FFFFFF" />
+      <circle cx="46" cy="18" r="2" fill="#FFFFFF" />
+    </svg>);
+
+}
+function SparkleGlyph({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      <path d="M11 2l2.2 6.8L20 11l-6.8 2.2L11 20l-2.2-6.8L2 11l6.8-2.2z" fill="#FFFFFF" />
+    </svg>);
+
+}
+function DownloadGlyph({ color = 'currentColor' }) {
+  return (
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+      <path d="M28 8v28M16 26l12 12 12-12" stroke={color} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M10 44h36" stroke={color} strokeWidth="5" strokeLinecap="round" />
+    </svg>);
+
+}
+
+// ── Card 04 · Features ──────────────────────────────────────────────────
+function FeatureCard({ bundle, products }) {
+  const totalPages = products.reduce((s, p) => s + (parseInt(p.galleryImages, 10) || 0), 0);
+  const features = [
+  { title: 'Tap to navigate', body: 'Every TOC, index and back-link is wired up. Fingers stay on the page.' },
+  { title: 'Made for reMarkable', body: `Sized for Paper Pro and Paper Pro Move. ${totalPages.toLocaleString()} pages, no scaling artifacts.` },
+  { title: 'Lifetime updates', body: 'New years roll out automatically. One purchase, every future revision.' },
+  { title: 'Universal PDF', body: 'Works on reMarkable, Supernote, GoodNotes, Noteshelf — anywhere PDF works.' },
+  { title: 'Mix & match', body: 'Each planner stands alone. Pull what you need into your existing workflow.' },
+  { title: 'Buy once. Use forever.', body: 'No subscriptions, no accounts, no ads. Download, sideload, done.' }];
+
+  const t = tone(bundle);
+
+  return (
+    <CardFrame bundle={bundle}>
+      <div style={{
+        position: 'absolute', top: 130, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 30, lineHeight: 0 }}>
+          <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 440, height: 'auto', display: 'inline-block', verticalAlign: 'middle' }} />
+          <TierPill bundle={bundle} size={42} />
+        </div>
+        <SectionTitle marginTop={40} color={undefined}>Why This Bundle</SectionTitle>
+        <div style={{
+          marginTop: 26, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 56, color: '#FFFFFF'
+        }}>Six things built in.</div>
+      </div>
+
+      <div style={{
+        position: 'absolute', top: 740, left: 80, right: 80, bottom: 120,
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 30
+      }}>
+        {features.map((f, i) =>
+        <div key={i} style={{
+          background: 'rgba(255,255,255,0.05)',
+          border: `2px solid ${t.accent}`,
+          borderRadius: 32, padding: '40px 44px',
+          display: 'flex', flexDirection: 'column', gap: 18
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+              <CheckIcon size={48} />
+              <span style={{
+              fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+              fontSize: 38, color: t.accent
+            }}>0{i + 1}</span>
+            </div>
+            <div style={{ fontSize: 50, fontWeight: 700, color: '#FFFFFF', lineHeight: 1.1 }}>
+              {f.title}
+            </div>
+            <div style={{ fontSize: 28, color: 'rgba(255,255,255,0.85)', lineHeight: 1.4 }}>
+              {f.body}
+            </div>
+          </div>
+        )}
+      </div>
+    </CardFrame>);
+
+}
+
+// ── Card 05 · How to use ────────────────────────────────────────────────
+function HowToCard({ bundle }) {
+  const steps = [
+  { num: '01', title: 'Buy & Download', body: 'Instant download after checkout. PDF files, zero install.' },
+  { num: '02', title: 'Sideload to Tablet', body: 'Drag onto reMarkable Cloud or USB-transfer. Two minutes.' },
+  { num: '03', title: 'Start Planning', body: 'Tap into any month, page, or section. Hyperlinks do the rest.' }];
+
+  const t = tone(bundle);
+
+  return (
+    <CardFrame bundle={bundle}>
+      <div style={{
+        position: 'absolute', top: 130, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 30, lineHeight: 0 }}>
+          <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 440, height: 'auto', display: 'inline-block', verticalAlign: 'middle' }} />
+          <TierPill bundle={bundle} size={42} />
+        </div>
+        <SectionTitle marginTop={40} color={undefined}>How to Use</SectionTitle>
+        <div style={{
+          marginTop: 26, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 56, color: '#FFFFFF'
+        }}>Three steps. Five minutes.</div>
+      </div>
+
+      <div style={{
+        position: 'absolute', top: 760, left: 80, right: 80, bottom: 160,
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 40
+      }}>
+        {steps.map((s, i) =>
+        <div key={s.num} style={{
+          position: 'relative',
+          background: i === 1 ? t.accent : 'rgba(255,255,255,0.05)',
+          border: i === 1 ? 'none' : `2px solid ${t.accent}`,
+          borderRadius: 38, padding: '52px 44px',
+          display: 'flex', flexDirection: 'column'
+        }}>
+            <div style={{
+            fontSize: 220, fontWeight: 800, lineHeight: 1,
+            color: i === 1 ? '#FFFFFF' : t.accent,
+            letterSpacing: '-0.04em'
+          }}>{s.num}</div>
+            <div style={{
+            marginTop: 40, fontSize: 56, fontWeight: 700, color: '#FFFFFF',
+            lineHeight: 1.05
+          }}>{s.title}</div>
+            <div style={{
+            marginTop: 24, fontSize: 32, color: 'rgba(255,255,255,0.9)',
+            lineHeight: 1.4
+          }}>{s.body}</div>
+            {i < 2 &&
+          <div style={{
+            position: 'absolute', right: -24, top: '50%',
+            fontSize: 60, color: t.accent, fontWeight: 700
+          }}>→</div>
+          }
+          </div>
+        )}
+      </div>
+    </CardFrame>);
+
+}
+
+// ── Card 06 · Lifestyle placeholder ─────────────────────────────────────
+function LifestyleCard({ bundle }) {
+  const t = tone(bundle);
+  return (
+    <CardFrame bundle={bundle}>
+      <div style={{
+        position: 'absolute', top: 130, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 30, lineHeight: 0 }}>
+          <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 440, height: 'auto', display: 'inline-block', verticalAlign: 'middle' }} />
+          <TierPill bundle={bundle} size={42} />
+        </div>
+        <SectionTitle marginTop={40} color={undefined}>In Real Life</SectionTitle>
+        <div style={{
+          marginTop: 26, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 56, color: '#FFFFFF'
+        }}>On an actual reMarkable.</div>
+      </div>
+
+      {/* Striped placeholder */}
+      <div style={{
+        position: 'absolute', top: 760, left: 120, right: 120, bottom: 160,
+        background: `repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0 32px, rgba(255,255,255,0.10) 32px 64px)`,
+        border: `3px dashed ${t.accent}`,
+        borderRadius: 38,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        gap: 40
+      }}>
+        <div style={{
+          fontSize: 50, fontWeight: 700, color: t.accent,
+          letterSpacing: '0.18em', textTransform: 'uppercase'
+        }}>/ lifestyle photo /</div>
+        <div style={{
+          fontSize: 42, color: '#FFFFFF', textAlign: 'center', maxWidth: 1300,
+          lineHeight: 1.4
+        }}>Drop in a real photo of the {bundle.name} on a reMarkable.<br />
+        Hands-on-device, top-down, or in-context all work.</div>
+        <div style={{
+          padding: '16px 32px', background: 'rgba(255,255,255,0.10)',
+          borderRadius: 999, color: '#FFFFFF', fontSize: 28, fontWeight: 500,
+          letterSpacing: '0.08em'
+        }}>2000 × 2000 · sRGB · &lt; 5 MB</div>
+      </div>
+    </CardFrame>);
+
+}
+
+// ── Card 07 · Bundle stats ─────────────────────────────────────────────
+function StatsCard({ bundle, products }) {
+  const totalPages = products.reduce((s, p) => s + (parseInt(p.galleryImages, 10) || 0), 0);
+  const cats = Array.from(new Set(products.map((p) => p.category).filter(Boolean)));
+  const stats = [
+  { big: bundle.totalProducts, label: 'Planners' },
+  { big: totalPages.toLocaleString(), label: 'Pages of templates' },
+  { big: cats.length || '1', label: 'Categories covered' },
+  { big: '3', label: 'Devices supported' },
+  { big: '∞', label: 'Lifetime updates' },
+  { big: bundle.price, label: 'One-time price' }];
+
+  const t = tone(bundle);
+  return (
+    <CardFrame bundle={bundle}>
+      <div style={{
+        position: 'absolute', top: 130, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 30, lineHeight: 0 }}>
+          <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 440, height: 'auto', display: 'inline-block', verticalAlign: 'middle' }} />
+          <TierPill bundle={bundle} size={42} />
+        </div>
+        <SectionTitle marginTop={40} color={undefined}>{bundle.name}</SectionTitle>
+        <div style={{
+          marginTop: 26, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 56, color: '#FFFFFF'
+        }}>By the numbers</div>
+      </div>
+
+      <div style={{
+        position: 'absolute', top: 760, left: 80, right: 80, bottom: 120,
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 30
+      }}>
+        {stats.map((s, i) =>
+        <div key={i} style={{
+          background: i % 2 === 0 ? t.accent : 'rgba(255,255,255,0.05)',
+          border: i % 2 === 0 ? 'none' : `2px solid ${t.accent}`,
+          borderRadius: 38, padding: '48px 44px',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+          minHeight: 380
+        }}>
+            <div style={{
+            fontSize: 30, fontWeight: 600, color: 'rgba(255,255,255,0.85)',
+            letterSpacing: '0.08em', textTransform: 'uppercase'
+          }}>0{i + 1}</div>
+            <div style={{
+            fontSize: 180, fontWeight: 800, color: '#FFFFFF',
+            lineHeight: 1, letterSpacing: '-0.03em'
+          }}>{s.big}</div>
+            <div style={{
+            fontSize: 36, fontWeight: 600, color: '#FFFFFF', lineHeight: 1.2
+          }}>{s.label}</div>
+          </div>
+        )}
+      </div>
+    </CardFrame>);
+
+}
+
+// ── Card 08 · Left & Right Hand Optimized ─────────────────────────────
+function HandednessCard({ bundle, products }) {
+  const t = tone(bundle);
+  // Pick a real schedule/daily key page if available, else fall back
+  const product = products[0];
+  const keyPages = product ? pickKeyPages(product.id, 6) : [];
+  const screenSrc = keyPages[2] || keyPages[0] || product?.sampleUrl || bundle.firstImage;
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+
+      {/* Top-right tier pill */}
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header block */}
+      <div style={{
+        position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <SectionTitle marginTop={14} max={100.688} min={80}>Left &amp; Right Optimized</SectionTitle>
+        <div style={{
+          marginTop: 22, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 50, color: '#FFFFFF'
+        }}>Choose the layout that fits how you write</div>
+        <div style={{
+          marginTop: 36, fontSize: 56, fontWeight: 600, color: '#FFFFFF'
+        }}>Same system. Fully optimized for either hand</div>
+      </div>
+
+      {/* Two tablets side-by-side, with handedness labels above + CTA below */}
+      <div style={{
+        position: 'absolute', top: 540, left: 0, right: 0, bottom: 240,
+        display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+        gap: 20
+      }}>
+        {[
+        { id: 'right', label: 'RIGHT-HANDED', cta: 'Right-Handed Layout', flip: false },
+        { id: 'left', label: 'LEFT-HANDED', cta: 'Left-Handed Layout', flip: true }].
+        map((side) =>
+        <div key={side.id} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 40
+        }}>
+            <div style={{
+            background: 'rgba(255,255,255,0.1)', color: '#FFFFFF',
+            padding: '14px 28px', borderRadius: 999,
+            fontSize: 36, fontWeight: 600,
+            border: '2px solid rgba(255,255,255,0.4)',
+            letterSpacing: '0.04em',
+            whiteSpace: 'nowrap'
+          }}>{side.label}</div>
+            <div style={{ transform: side.flip ? 'scaleX(-1)' : 'none' }}>
+              <Tablet src={screenSrc} width={680} />
+            </div>
+            <div style={{
+            background: t.accent, color: '#FFFFFF',
+            borderRadius: 18, padding: '24px 60px',
+            fontSize: 42, fontWeight: 700,
+            boxShadow: '0 16px 0 -8px rgba(0,0,0,0.25)'
+            // Compensate for the asymmetric bezel so the CTA visually
+            // centers to the tablet's screen area, not its bezel center.
+          }}>{side.cta}</div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        position: 'absolute', bottom: 90, left: 100, right: 100,
+        textAlign: 'center', color: '#FFFFFF',
+        fontSize: 38, fontWeight: 500, lineHeight: 1.3
+      }}></div>
+    </CardFrame>);
+
+}
+
+// ── Card 09 · Built for Real Work (audience cards) ────────────────────
+function AudienceCard({ bundle }) {
+  const t = tone(bundle);
+  const audiences = [
+  {
+    name: 'Professionals',
+    Icon: BriefcaseIcon,
+    bullets: [
+    'Stay organised across meetings, projects, and priorities',
+    'Manage deadlines and daily tasks with clarity',
+    'Maintain focus in high-volume work environments'],
+
+    cta: 'Stay Organized'
+  },
+  {
+    name: 'Students',
+    Icon: GradCapIcon,
+    bullets: [
+    'Plan coursework, deadlines, and revision clearly',
+    'Keep track of assignments and exams',
+    'Build consistent, effective study habits'],
+
+    cta: 'Stay Ahead'
+  },
+  {
+    name: 'Creators',
+    Icon: BulbGearIcon,
+    bullets: [
+    'Structure ideas, content, and workflows',
+    'Organise projects from concept to execution',
+    'Capture and develop new ideas instantly'],
+
+    cta: 'Structure Ideas'
+  },
+  {
+    name: 'Daily Planners',
+    Icon: TargetIcon,
+    bullets: [
+    'Take control of your day with clarity and focus',
+    'Break down goals into actionable steps',
+    'Track progress and stay consistently ahead'],
+
+    cta: 'Take Control'
+  }];
+
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header */}
+      <div style={{
+        position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center'
+      }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <SectionTitle marginTop={14} max={120}>Built for Real Work</SectionTitle>
+        <div style={{
+          marginTop: 22, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 46, color: '#FFFFFF', maxWidth: 1400, margin: '22px auto 0',
+          lineHeight: 1.3
+        }}>See why professionals, students, and creators choose Templix every day</div>
+      </div>
+
+      {/* 2x2 grid — centered, square cards matching the Included card */}
+      <div style={{
+        position: 'absolute', top: 500, left: '50%', transform: 'translateX(-50%)',
+        width: 1300, bottom: 240,
+        display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr',
+        gap: 32, justifyContent: 'center', alignContent: 'center'
+      }}>
+        {audiences.map((a) => {
+          const Icon = a.Icon;
+          return (
+            <div key={a.name} style={{
+              background: '#FFFFFF',
+              borderRadius: 32,
+              padding: '36px 44px',
+              boxShadow: '0 20px 40px -20px rgba(0,0,0,0.4)',
+              display: 'flex', flexDirection: 'column'
+            }}>
+              {/* Icon disc */}
+              <div style={{
+                width: 110, height: 110, borderRadius: '50%',
+                background: t.accent, alignSelf: 'center',
+                color: t.accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <Icon />
+              </div>
+              {/* Name */}
+              <div style={{
+                marginTop: 16, fontSize: 48, fontWeight: 700, color: '#1B1A17',
+                textAlign: 'center', letterSpacing: '-0.01em'
+              }}>{a.name}</div>
+              {/* Bullets */}
+              <ul style={{
+                margin: '24px 0 0', padding: 0, listStyle: 'none',
+                display: 'flex', flexDirection: 'column', gap: 18, flex: 1
+              }}>
+                {a.bullets.map((b, i) =>
+                <li key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 18,
+                  fontSize: 28, color: '#1B1A17', lineHeight: 1.3, fontWeight: 500
+                }}>
+                    <span style={{ flexShrink: 0, paddingTop: 4 }}>
+                      <CheckGlyph color={t.accent} />
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                )}
+              </ul>
+              {/* CTA */}
+              <div style={{
+                marginTop: 28, background: t.accent, color: '#FFFFFF',
+                borderRadius: 14, padding: '18px 12px', textAlign: 'center',
+                fontSize: 28, fontWeight: 700
+              }}>{a.cta}</div>
+            </div>);
+
+        })}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        position: 'absolute', bottom: 70, left: 0, right: 0,
+        textAlign: 'center', color: '#FFFFFF',
+        fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+        fontSize: 40, fontWeight: 400
+      }}>Built from real-world workflows — designed for clarity, speed, and execution</div>
+    </CardFrame>);
+
+}
+
+// Inline check for audience bullets (tier-accent stroke)
+function CheckGlyph({ color }) {
+  const c = color || '#2D6A6A';
+  return (
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <path d="M5 15l5 5 13-13" stroke={c} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>);
+
+}
+
+// Audience disc icons — chunky, mixed fill+stroke for visual weight
+function BriefcaseIcon() {
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      {/* Handle */}
+      <path d="M22 18v-4a4 4 0 014-4h8a4 4 0 014 4v4" stroke="#FFFFFF" strokeWidth="4" strokeLinecap="round" />
+      {/* Case body */}
+      <rect x="8" y="18" width="44" height="32" rx="4" fill="#FFFFFF" />
+      {/* Center clasp */}
+      <rect x="25" y="30" width="10" height="6" rx="1.5" fill="currentColor" opacity="0.25" />
+      {/* Lid split line */}
+      <path d="M8 32h44" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+    </svg>);
+
+}
+function GradCapIcon() {
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      {/* Cap top */}
+      <path d="M4 24l26-12 26 12-26 12z" fill="#FFFFFF" />
+      {/* Cap base curve */}
+      <path d="M14 30v10c0 4 6 8 16 8s16-4 16-8V30" fill="#FFFFFF" />
+      {/* Tassel */}
+      <path d="M50 24v10" stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" />
+      <circle cx="50" cy="36" r="2.5" fill="#FFFFFF" />
+    </svg>);
+
+}
+function BulbGearIcon() {
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      {/* Rays */}
+      <path d="M30 4v6M30 50v6M52 24l-5 2M13 34l-5 2M48 8l-4 4M16 48l-4 4M52 44l-5-2M13 26l-5-2M12 8l4 4M48 48l-4-4"
+      stroke="#FFFFFF" strokeWidth="3.5" strokeLinecap="round" />
+      {/* Bulb body */}
+      <path d="M18 28a12 12 0 1124 0c0 6-4 9-4 12h-16c0-3-4-6-4-12z" fill="#FFFFFF" />
+      {/* Filament */}
+      <path d="M26 28l4 6 4-6" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      {/* Base */}
+      <rect x="23" y="42" width="14" height="5" rx="1.5" fill="#FFFFFF" />
+      <rect x="25" y="49" width="10" height="3" rx="1" fill="#FFFFFF" />
+    </svg>);
+
+}
+function TargetIcon() {
+  return (
+    <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+      {/* Crosshair lines */}
+      <path d="M30 4v52M4 30h52" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" />
+      {/* Outer ring */}
+      <circle cx="30" cy="30" r="19" stroke="#FFFFFF" strokeWidth="4" />
+      {/* Mid ring */}
+      <circle cx="30" cy="30" r="12" stroke="#FFFFFF" strokeWidth="4" />
+      {/* Bullseye */}
+      <circle cx="30" cy="30" r="5" fill="#FFFFFF" />
+    </svg>);
+
+}
+
+// ── Card 10 · 6 Colour Editions ──────────────────────────────────────
+function ColourEditionsCard({ bundle, products }) {
+  const t = tone(bundle);
+  const product = products[0];
+  const keyPages = product ? pickKeyPages(product.id, 6) : [];
+  const screenSrc = keyPages[2] || keyPages[0] || product?.sampleUrl || bundle.firstImage;
+
+  const colours = [
+  { name: 'Red', hex: '#D9434F', words: ['Priority', 'Urgency'] },
+  { name: 'Teal', hex: '#3FAFA8', words: ['Calm', 'Balance'] },
+  { name: 'Orange', hex: '#E59A2B', words: ['Planning', 'Structure'] },
+  { name: 'Blue', hex: '#4F6FB8', words: ['Focus', 'Clarity'] },
+  { name: 'Purple', hex: '#7E45C4', words: ['Creativity', 'Thinking'] },
+  { name: 'Black', hex: '#1B1A17', words: ['Minimal', 'Clean'] }];
+
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center' }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <SectionTitle marginTop={14} max={120}>6 Colours - 1 System</SectionTitle>
+        <div style={{
+          marginTop: 22, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 50, color: '#FFFFFF'
+        }}>Every template, fully available in all 6 colour editions</div>
+      </div>
+
+      {/* Color line dividers — thin tinted segments under the headers */}
+      <div style={{
+        position: 'absolute', top: 500, left: 100, right: 100,
+        display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 18
+      }}>
+        {colours.map((c) =>
+        <div key={c.name} style={{ height: 4, borderRadius: 2, background: c.hex }} />
+        )}
+      </div>
+
+      {/* Tablets cascading left-to-right, each tinted */}
+      <div style={{
+        position: 'absolute', top: 550, left: 0, right: 0, height: 800,
+        display: 'flex', justifyContent: 'center'
+      }}>
+        {colours.map((c, i) => {
+          const off = i - 2.5; // -2.5 ... +2.5
+          return (
+            <div key={c.name} style={{
+              position: 'absolute',
+              left: `calc(50% + ${off * 230}px)`,
+              top: i * 24, // staircase down to the right
+              transform: `translateX(-50%)`,
+              zIndex: i + 1, // each later tablet sits on top
+              filter: `drop-shadow(0 22px 36px rgba(0,0,0,0.28))`
+            }}>
+              <div style={{ position: 'relative' }}>
+                <Tablet src={screenSrc} width={610} />
+                {/* Color tint overlay on the screen area */}
+                <div style={{
+                  position: 'absolute',
+                  top: '4.2%', left: '7.1%',
+                  right: '19.6%', bottom: '12.7%',
+                  background: c.hex,
+                  mixBlendMode: 'multiply',
+                  opacity: 0.35,
+                  pointerEvents: 'none'
+                }} />
+              </div>
+            </div>);
+
+        })}
+      </div>
+
+      {/* Color labels row — anchored to the bottom */}
+      <div style={{
+        position: 'absolute', bottom: 140, left: 100, right: 100,
+        display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 18
+      }}>
+        {colours.map((c) =>
+        <div key={c.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+            <div style={{
+            background: c.hex, color: '#FFFFFF',
+            padding: '14px 0', borderRadius: 999,
+            fontSize: 30, fontWeight: 600,
+            border: '2px solid rgba(255,255,255,0.4)',
+            letterSpacing: '0.04em',
+            whiteSpace: 'nowrap',
+            textAlign: 'center',
+            boxSizing: 'border-box'
+          }}>{c.name}</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', color: '#FFFFFF', textAlign: 'center' }}>
+              {c.words.map((w) =>
+            <li key={w} style={{ fontSize: 24, fontWeight: 500, lineHeight: 1.4 }}>· {w}</li>
+            )}
+            </ul>
+          </div>
+        )}
+      </div>
+    </CardFrame>);
+
+}
+
+// ── Card 11 · Try Before You Buy ──────────────────────────────────────
+function TryBeforeCard({ bundle, products }) {
+  const t = tone(bundle);
+  const product = products[0];
+  const keyPages = product ? pickKeyPages(product.id, 8) : [];
+  // 5 different key pages, fall back if not enough
+  const fanSrcs = Array.from({ length: 5 }, (_, i) =>
+  keyPages[i] || keyPages[i % Math.max(keyPages.length, 1)] || product?.sampleUrl || bundle.firstImage
+  );
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center' }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <SectionTitle marginTop={14} max={120}>Try Before You Buy</SectionTitle>
+        <div style={{
+          marginTop: 22, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 46, color: '#FFFFFF', maxWidth: 1500, margin: '22px auto 0',
+          lineHeight: 1.3
+        }}>Explore a limited version of the system and test the layout and navigation on your reMarkable before upgrading to the full suite.</div>
+      </div>
+
+      {/* Fanned tablets — 5 of them, symmetric around center */}
+      <div style={{
+        position: 'absolute', top: 480, left: 0, right: 0, height: 920,
+        display: 'flex', justifyContent: 'center', alignItems: 'flex-start'
+      }}>
+        {fanSrcs.map((src, i) => {
+          const off = i - 2; // -2,-1,0,+1,+2
+          const dist = Math.abs(off);
+          const angle = off * 5; // ±10° at the edges
+          const xPx = off * 220; // symmetric horizontal spread
+          const yPx = dist * 40; // sides drop down
+          const w = 590 - dist * 30; // center tablet widest
+          return (
+            <div key={i} style={{
+              position: 'absolute',
+              left: `calc(50% + ${xPx}px)`,
+              top: yPx,
+              transform: `translateX(-50%) rotate(${angle}deg)`,
+              transformOrigin: 'bottom center',
+              zIndex: 5 - dist,
+              filter: 'drop-shadow(0 22px 36px rgba(0,0,0,0.28))'
+            }}>
+              <Tablet src={src} width={w} />
+            </div>);
+
+        })}
+      </div>
+
+      {/* Italic mid-strip */}
+      <div style={{
+        position: 'absolute', top: 1500, left: 0, right: 0,
+        textAlign: 'center', color: '#FFFFFF',
+        fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+        fontSize: 42
+      }}>Limited sample from a previous edition — full system available in the complete version</div>
+
+      {/* Bottom split: checklist + download CTA */}
+      <div style={{
+        position: 'absolute', bottom: 100, left: 100, right: 100,
+        display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 60, alignItems: 'stretch'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24, color: '#FFFFFF' }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {[
+            'Download instantly — no cost, no risk',
+            'Test real pages before you upgrade',
+            'See how it fits your workflow in minutes',
+            'No setup required — works instantly'].
+            map((b, i) =>
+            <li key={i} style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 30, fontWeight: 500 }}>
+                <CheckIcon size={30} />
+                <span>{b}</span>
+              </li>
+            )}
+          </ul>
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 38, fontWeight: 700 }}>Try Before You Buy</div>
+            <div style={{ fontSize: 32, fontWeight: 600, marginTop: 6, opacity: 0.95 }}>
+              Get the Free Sample — Limited Access
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          background: t.accent, color: '#FFFFFF',
+          borderRadius: 32, padding: '40px 36px',
+          display: 'flex', alignItems: 'center', gap: 28
+        }}>
+          <div style={{ flexShrink: 0 }}>
+            <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+              <path d="M60 22v54M36 56l24 24 24-24" stroke="#FFFFFF" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M24 92h72" stroke="#FFFFFF" strokeWidth="8" strokeLinecap="round" />
+            </svg>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 56, fontWeight: 800, lineHeight: 1.05 }}>DOWNLOAD<br />FREE SAMPLE</div>
+            <div style={{ marginTop: 14, fontSize: 26, fontWeight: 500, opacity: 0.95 }}>
+              Instant Download — Link in Description
+            </div>
+          </div>
+        </div>
+      </div>
+    </CardFrame>);
+
+}
+
+// ── Registry ────────────────────────────────────────────────────────────
+// ── Tablet-line icon set (matches the reference) ───────────────────────
+// Thin line work inside a tablet bezel with camera dot + home indicator.
+const lineStroke = { stroke, strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' };
+function LineTablet({ children }) {
+  return (
+    <svg width="100%" height="100%" viewBox="0 0 140 140" fill="none">
+      <rect x="22" y="6" width="96" height="124" rx="6" {...lineStroke} />
+      <circle cx="70" cy="13" r="1.6" fill={stroke} />
+      <path d="M62 124h16" {...lineStroke} />
+      {children}
+    </svg>);
+
+}
+
+// PDF Optimized — folder + download arrow on a doc
+function PdfOptimizedIcon() {
+  return (
+    <LineTablet>
+      {/* Folder back */}
+      <path d="M38 50h12l6 6h36v38a3 3 0 01-3 3H41a3 3 0 01-3-3z" {...lineStroke} />
+      {/* Doc on top with folded corner */}
+      <path d="M50 38h20l8 8v22H50z" {...lineStroke} />
+      <path d="M70 38v8h8" {...lineStroke} />
+      {/* Down arrow on the folder */}
+      <circle cx="60" cy="86" r="10" {...lineStroke} />
+      <path d="M60 80v12M55 86l5 6 5-6" {...lineStroke} />
+    </LineTablet>);
+
+}
+
+// Calendar with circled date
+function CalendarPageIcon() {
+  return (
+    <LineTablet>
+      <rect x="34" y="34" width="72" height="60" rx="3" {...lineStroke} />
+      <path d="M44 28v12M64 28v12M84 28v12" {...lineStroke} />
+      <path d="M34 50h72" {...lineStroke} />
+      {/* Grid */}
+      <path d="M52 50v44M70 50v44M88 50v44M34 64h72M34 78h72" stroke={stroke} strokeWidth="2" strokeLinecap="round" />
+      {/* Circled "12" */}
+      <circle cx="79" cy="86" r="7" {...lineStroke} />
+      <text x="79" y="89" fill={stroke} fontFamily="Sora, system-ui" fontSize="8" fontWeight="700" textAnchor="middle">12</text>
+    </LineTablet>);
+
+}
+
+// Notes — page with header + lines + pencil
+function NotesPageIcon() {
+  return (
+    <LineTablet>
+      <path d="M38 32h52v68H38z" {...lineStroke} />
+      <rect x="42" y="38" width="32" height="10" rx="2" {...lineStroke} />
+      <path d="M42 58h44M42 66h44M42 74h36M42 82h44M42 90h28" {...lineStroke} />
+      {/* Pencil */}
+      <path d="M96 60l10-10 6 6-10 10zM96 60l-4 12 12-4" {...lineStroke} />
+    </LineTablet>);
+
+}
+
+// Meetings — header avatars + lines + chat bubble
+function MeetingsIcon() {
+  return (
+    <LineTablet>
+      <path d="M38 32h52v52H38z" {...lineStroke} />
+      <circle cx="49" cy="46" r="5" {...lineStroke} />
+      <circle cx="61" cy="46" r="5" {...lineStroke} />
+      <path d="M42 60h44M42 68h36M42 76h44" {...lineStroke} />
+      {/* Chat bubble */}
+      <path d="M76 88h22a4 4 0 014 4v10a4 4 0 01-4 4H88l-6 6v-6h-6a4 4 0 01-4-4V92a4 4 0 014-4z" {...lineStroke} />
+      <circle cx="83" cy="97" r="1.2" fill={stroke} />
+      <circle cx="89" cy="97" r="1.2" fill={stroke} />
+      <circle cx="95" cy="97" r="1.2" fill={stroke} />
+    </LineTablet>);
+
+}
+
+// Agenda — 3 circle-checks with lines
+function AgendaIcon() {
+  return (
+    <LineTablet>
+      <path d="M38 34h52v66H38z" {...lineStroke} />
+      <circle cx="48" cy="48" r="5" {...lineStroke} />
+      <path d="M45.5 48l2 2 3.5-3.5" {...lineStroke} />
+      <path d="M60 46h22M60 52h16" {...lineStroke} />
+      <circle cx="48" cy="68" r="5" {...lineStroke} />
+      <path d="M45.5 68l2 2 3.5-3.5" {...lineStroke} />
+      <path d="M60 66h22M60 72h14" {...lineStroke} />
+      <circle cx="48" cy="88" r="5" {...lineStroke} />
+      <path d="M45.5 88l2 2 3.5-3.5" {...lineStroke} />
+      <path d="M60 86h22M60 92h18" {...lineStroke} />
+    </LineTablet>);
+
+}
+
+window.ICONS = {
+  // Existing keys (used by the hero card's 3 tiles) — point at the new tablet variants
+  pages: PagesIcon,
+  hierarchy: HierarchyIcon,
+  nav: GridTabletIcon,
+  star: StarChecklistIcon,
+  calendar: CalendarIcon,
+  check: ChecklistIcon,
+  link: LinkIcon,
+  // New library keys
+  template: PagesIcon,
+  modules: HierarchyIcon,
+  newtemplate: NewTemplateIcon,
+  edit: EditTemplateIcon,
+  layout: LayoutIcon,
+  simple: SimplePageIcon,
+  checklist: ChecklistIcon,
+  download: DownloadIcon,
+  stack: StackIcon,
+  files: FilesIcon,
+  share: ShareIcon,
+  settings: SettingsIcon,
+  // Tablet-line set (PDF Optimized / Calendar / Notes / Meetings / Agenda)
+  pdf: PdfOptimizedIcon,
+  calendarLine: CalendarPageIcon,
+  notes: NotesPageIcon,
+  meetings: MeetingsIcon,
+  agenda: AgendaIcon
+};
+
+// ── Card 12 · Quick Activities · variant A — fanned (original) ────────
+function QuickActivitiesCard({ bundle, products, variant = 'fan' }) {
+  const t = tone(bundle);
+  const product = products[0];
+  const keyPages = product ? pickKeyPages(product.id, 6) : [];
+  const fallbacks = products.map((p) => p.sampleUrl).filter(Boolean);
+  const srcs = [
+  keyPages[0] || fallbacks[0] || bundle.firstImage,
+  keyPages[2] || fallbacks[1] || fallbacks[0] || bundle.firstImage,
+  keyPages[4] || fallbacks[2] || fallbacks[0] || bundle.firstImage];
+
+  const items = [
+  { label: 'Sticker Sheets', src: srcs[0] },
+  { label: 'Coloring Pages', src: srcs[1] },
+  { label: 'Tracing Pages', src: srcs[2] }];
+
+
+  return (
+    <CardFrame bundle={bundle}>
+      <Ribbon bundle={bundle} />
+      <div style={{ position: 'absolute', top: 80, right: 80 }}>
+        <TierPill bundle={bundle} size={42} />
+      </div>
+
+      {/* Header */}
+      <div style={{ position: 'absolute', top: 80, left: 0, right: 0, textAlign: 'center' }}>
+        <img src="generator/templix-logo.png" alt="Templix Studios" crossOrigin="anonymous" style={{ width: 580, height: 'auto', display: 'inline-block', marginTop: -10 }} />
+        <h2 style={{
+          margin: '14px 0 0', fontSize: 140, fontWeight: 800, lineHeight: 0.95,
+          letterSpacing: '-0.02em', color: '#FFFFFF'
+        }}>Quick Activities</h2>
+        <div style={{
+          marginTop: 22, fontFamily: '"Instrument Serif", serif', fontStyle: 'italic',
+          fontSize: 50, color: '#FFFFFF'
+        }}>Pick up, play, put down — anytime</div>
+      </div>
+
+      {variant === 'fan' && <QuickFan items={items} />}
+      {variant === 'row' && <QuickRow items={items} />}
+      {variant === 'stack' && <QuickStack items={items} />}
+      {variant === 'deck' && <QuickDeck items={items} accent={t.accent} />}
+      {variant === 'hero-strip' && <QuickHeroStrip items={items} />}
+
+    </CardFrame>);
+
+}
+
+// ── Variant: original fan (center forward, sides tucked behind, tilted) ──
+function QuickFan({ items }) {
+  const cfg = [
+  { tilt: -6, w: 1080, dy: 100 },
+  { tilt: 0, w: 1200, dy: 0 },
+  { tilt: 6, w: 1080, dy: 100 }];
+
+  return (
+    <>
+      <div style={{
+        position: 'absolute', top: 460, left: 120, right: 120,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+      }}>
+        {items.map((tb) =>
+        <div key={tb.label} style={{
+          background: 'rgba(255,255,255,0.1)', color: '#FFFFFF',
+          padding: '14px 28px', borderRadius: 999,
+          fontSize: 36, fontWeight: 600,
+          border: '2px solid rgba(255,255,255,0.4)',
+          whiteSpace: 'nowrap'
+        }}>{tb.label}</div>
+        )}
+      </div>
+      <div style={{
+        position: 'absolute', top: 560, left: 100, right: 0, height: 0, zIndex: 1,
+        display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+        pointerEvents: 'none'
+      }}>
+        <div style={{ position: 'relative', width: 0, height: 0 }}>
+          {items.map((tb, i) => {
+            const c = cfg[i];const off = (i - 1) * 540;
+            return (
+              <div key={i} style={{
+                position: 'absolute', top: c.dy, left: off, width: c.w,
+                marginLeft: -c.w / 2,
+                transform: `rotate(${c.tilt}deg)`, transformOrigin: 'center top',
+                zIndex: i === 1 ? 3 : 1
+              }}>
+                <Tablet src={tb.src} width={c.w} />
+              </div>);
+
+          })}
+        </div>
+      </div>
+    </>);
+
+}
+
+// ── Variant: even row, all same size ───────────────────────────────────
+function QuickRow({ items }) {
+  return (
+    <div style={{
+      position: 'absolute', top: 540, left: 80, right: 80, bottom: 200,
+      display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 40
+    }}>
+      {items.map((tb) =>
+      <div key={tb.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 36, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            <CheckIcon size={42} />
+            <span style={{ fontSize: 44, fontWeight: 600, color: '#FFFFFF' }}>{tb.label}</span>
+          </div>
+          <Tablet src={tb.src} width={560} />
+        </div>
+      )}
+    </div>);
+
+}
+
+// ── Variant: 3 fanned tablets with a divider line + pill labels at top ─
+function QuickStack({ items }) {
+  const cfg = [
+  { tilt: -6, w: 1080, dy: 100 },
+  { tilt: 0, w: 1200, dy: 0 },
+  { tilt: 6, w: 1080, dy: 100 }];
+
+  return (
+    <>
+      {/* Top label line with pills + horizontal rule */}
+      <div style={{
+        position: 'absolute', top: 460, left: 120, right: 120
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {items.map((tb) =>
+          <div key={tb.label} style={{
+            background: 'rgba(255,255,255,0.1)', color: '#FFFFFF',
+            padding: '14px 28px', borderRadius: 999,
+            fontSize: 36, fontWeight: 600,
+            border: '2px solid rgba(255,255,255,0.4)',
+            whiteSpace: 'nowrap'
+          }}>{tb.label}</div>
+          )}
+        </div>
+      </div>
+
+      {/* Three fanned tablets below */}
+      <div style={{
+        position: 'absolute', top: 600, left: 123, right: 0, height: 0, zIndex: 1,
+        display: 'flex', justifyContent: 'center', alignItems: 'flex-start',
+        pointerEvents: 'none'
+      }}>
+        <div style={{ position: 'relative', width: 0, height: 0 }}>
+          {items.map((tb, i) => {
+            const c = cfg[i];const off = (i - 1) * 540;
+            return (
+              <div key={i} style={{
+                position: 'absolute', top: c.dy, left: off, width: c.w,
+                marginLeft: -c.w / 2,
+                transform: `rotate(${c.tilt}deg)`, transformOrigin: 'center top',
+                zIndex: i === 1 ? 3 : 1
+              }}>
+                <Tablet src={tb.src} width={c.w} />
+              </div>);
+
+          })}
+        </div>
+      </div>
+    </>);
+
+}
+
+// ── Variant: deck (tight overlap, like a fanned hand of cards) ─────────
+function QuickDeck({ items, accent }) {
+  return (
+    <>
+      <div style={{
+        position: 'absolute', top: 540, left: '50%', transform: 'translateX(-50%)',
+        width: 1, height: 1, zIndex: 1
+      }}>
+        {items.map((tb, i) => {
+          const off = (i - 1) * 160;
+          const tilt = (i - 1) * 8;
+          return (
+            <div key={i} style={{
+              position: 'absolute', top: 0, left: off, width: 940,
+              marginLeft: -470,
+              transform: `rotate(${tilt}deg)`, transformOrigin: 'bottom center',
+              zIndex: i === 1 ? 3 : i === 0 ? 1 : 2
+            }}>
+              <Tablet src={tb.src} width={940} />
+            </div>);
+
+        })}
+      </div>
+      <div style={{
+        position: 'absolute', bottom: 180, left: 120, right: 120,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+      }}>
+        {items.map((tb) =>
+        <div key={tb.label} style={{
+          background: 'rgba(255,255,255,0.1)', color: '#FFFFFF',
+          padding: '14px 28px', borderRadius: 999,
+          fontSize: 36, fontWeight: 600,
+          border: '2px solid rgba(255,255,255,0.4)'
+        }}>{tb.label}</div>
+        )}
+      </div>
+    </>);
+
+}
+
+// ── Variant: single hero tablet + thumbnail strip below ────────────────
+function QuickHeroStrip({ items }) {
+  const [hero, ...rest] = items;
+  return (
+    <>
+      <div style={{
+        position: 'absolute', top: 520, left: '50%', transform: 'translateX(-50%)'
+      }}>
+        <Tablet src={hero.src} width={780} />
+      </div>
+      <div style={{
+        position: 'absolute', bottom: 220, left: 0, right: 0,
+        display: 'flex', justifyContent: 'center', gap: 80
+      }}>
+        {items.map((tb) =>
+        <div key={tb.label} style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18,
+          color: '#FFFFFF', textAlign: 'center', width: 320
+        }}>
+            <Tablet src={tb.src} width={300} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <CheckIcon size={28} />
+              <span style={{ fontSize: 28, fontWeight: 600 }}>{tb.label}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </>);
+
+}
+
+window.LISTING_CARDS = [
+{ id: 'hero', label: '01 · Hero / cover', Component: HeroCard },
+{ id: 'included', label: '02 · What\'s included', Component: IncludedCard },
+{ id: 'tiers', label: '03 · Tier comparison', Component: TierCard },
+{ id: 'features', label: '04 · Features', Component: FeatureCard },
+{ id: 'howto', label: '05 · How to use', Component: HowToCard },
+{ id: 'lifestyle', label: '06 · Lifestyle mockup', Component: LifestyleCard },
+{ id: 'stats', label: '07 · Bundle stats', Component: StatsCard },
+{ id: 'handedness', label: '08 · Left & Right Hand', Component: HandednessCard },
+{ id: 'audience', label: '09 · Built for Real Work', Component: AudienceCard },
+{ id: 'colours', label: '10 · 6 Colour Editions', Component: ColourEditionsCard },
+{ id: 'trybuy', label: '11 · Try Before You Buy', Component: TryBeforeCard },
+{ id: 'quick-1', label: '12 · Quick (1)', Component: (p) => <QuickActivitiesCard {...p} variant="stack" /> },
+{ id: 'quick-2', label: '13 · Quick (2)', Component: (p) => <QuickActivitiesCard {...p} variant="stack" /> },
+{ id: 'quick-3', label: '14 · Quick (3)', Component: (p) => <QuickActivitiesCard {...p} variant="stack" /> },
+{ id: 'quick-4', label: '15 · Quick (4)', Component: (p) => <QuickActivitiesCard {...p} variant="stack" /> },
+{ id: 'quick-5', label: '16 · Quick (5)', Component: (p) => <QuickActivitiesCard {...p} variant="stack" /> }];
