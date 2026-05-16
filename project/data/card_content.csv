@@ -1,0 +1,17 @@
+bundleCode,cardId,slot,value
+# bundleCode: bundle id ("PR05") or "*" for all bundles (bundle-specific wins)
+# cardId: hero | included | tiers | features | howto | lifestyle | stats
+# slot: see schema below
+# value: text or icon key. Use \n for line breaks. Tokens: {name} {totalProducts} {totalPages} {tier} {price}
+*,hero,feature_1,Left & Right-Handed Navigation
+*,hero,feature_2,6 Premium Color Themes
+*,hero,feature_3,Fully Hyperlinked Productivity System
+*,hero,feature_4,5 Included Language Versions
+*,hero,tile_1_label,PDF\nOptimized
+*,hero,tile_1_icon,pdf
+*,hero,tile_2_label,Calendar
+*,hero,tile_2_icon,calendarLine
+*,hero,tile_3_label,Notes
+*,hero,tile_3_icon,notes
+*,hero,tile_4_label,Meetings
+*,hero,tile_4_icon,meetings

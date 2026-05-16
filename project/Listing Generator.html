@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Templix · Etsy Listing Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #15130F; }
+    body { font-family: Geist, system-ui, sans-serif; color: #1B1A17; overflow: hidden; }
+    #app { height: 100vh; }
+    *::-webkit-scrollbar { width: 12px; height: 12px; }
+    *::-webkit-scrollbar-track { background: #15130F; }
+    *::-webkit-scrollbar-thumb { background: #2A2722; border-radius: 6px; border: 3px solid #15130F; }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/html-to-image@1.11.13/dist/html-to-image.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="dashboards/data.js"></script>
+  <script src="dashboards/pages.js"></script>
+  <script src="dashboards/core.js"></script>
+  <script src="dashboards/canva.js"></script>
+  <script src="generator/key-pages.js"></script>
+  <script src="generator/content.js?v=3"></script>
+  <script src="generator/bulk-update.js"></script>
+  <script src="generator/bulk-template.js"></script>
+  <script src="generator/persist.js?v=4"></script>
+  <script type="text/babel" src="generator/fit-text.jsx?v=2"></script>
+  <script type="text/babel" src="generator/nudge.jsx?v=7"></script>
+  <script type="text/babel" src="generator/cards.jsx?v=206"></script>
+  <script type="text/babel" src="generator/icon-picker.jsx?v=2"></script>
+  <script type="text/babel" src="generator/app.jsx?v=33"></script>
+</head>
+<body style="font-size: 15px">
+  <div id="app"></div>
+</body>
+</html>
